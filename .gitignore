@@ -1,0 +1,7 @@
+dataset/
+models/
+*.npy
+*.pt
+*.avi
+__pycache__/
+runs/

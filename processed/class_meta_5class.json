@@ -1,0 +1,1111 @@
+{
+  "metadata": [
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "1",
+      "fall": true,
+      "windows": 43,
+      "sitting_windows": 0
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "10",
+      "fall": true,
+      "windows": 111,
+      "sitting_windows": 0
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "11",
+      "fall": true,
+      "windows": 152,
+      "sitting_windows": 0
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "12",
+      "fall": true,
+      "windows": 51,
+      "sitting_windows": 5
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "13",
+      "fall": true,
+      "windows": 72,
+      "sitting_windows": 6
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "14",
+      "fall": true,
+      "windows": 49,
+      "sitting_windows": 0
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "15",
+      "fall": true,
+      "windows": 37,
+      "sitting_windows": 0
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "16",
+      "fall": true,
+      "windows": 50,
+      "sitting_windows": 0
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "17",
+      "fall": true,
+      "windows": 43,
+      "sitting_windows": 0
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "18",
+      "fall": true,
+      "windows": 80,
+      "sitting_windows": 0
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "19",
+      "fall": true,
+      "windows": 62,
+      "sitting_windows": 0
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "2",
+      "fall": true,
+      "windows": 93,
+      "sitting_windows": 0
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "20",
+      "fall": true,
+      "windows": 139,
+      "sitting_windows": 0
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "21",
+      "fall": true,
+      "windows": 51,
+      "sitting_windows": 0
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "22",
+      "fall": true,
+      "windows": 67,
+      "sitting_windows": 11
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "23",
+      "fall": true,
+      "windows": 94,
+      "sitting_windows": 32
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "24",
+      "fall": true,
+      "windows": 80,
+      "sitting_windows": 36
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "25",
+      "fall": true,
+      "windows": 78,
+      "sitting_windows": 6
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "26",
+      "fall": true,
+      "windows": 83,
+      "sitting_windows": 8
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "27",
+      "fall": true,
+      "windows": 75,
+      "sitting_windows": 5
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "28",
+      "fall": true,
+      "windows": 49,
+      "sitting_windows": 7
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "29",
+      "fall": true,
+      "windows": 100,
+      "sitting_windows": 6
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "3",
+      "fall": true,
+      "windows": 92,
+      "sitting_windows": 1
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "30",
+      "fall": true,
+      "windows": 39,
+      "sitting_windows": 2
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "31",
+      "fall": true,
+      "windows": 79,
+      "sitting_windows": 0
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "32",
+      "fall": true,
+      "windows": 92,
+      "sitting_windows": 6
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "33",
+      "fall": true,
+      "windows": 66,
+      "sitting_windows": 0
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "34",
+      "fall": true,
+      "windows": 129,
+      "sitting_windows": 36
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "35",
+      "fall": true,
+      "windows": 68,
+      "sitting_windows": 2
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "36",
+      "fall": true,
+      "windows": 392,
+      "sitting_windows": 0
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "37",
+      "fall": true,
+      "windows": 59,
+      "sitting_windows": 0
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "38",
+      "fall": true,
+      "windows": 108,
+      "sitting_windows": 49
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "39",
+      "fall": true,
+      "windows": 43,
+      "sitting_windows": 0
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "4",
+      "fall": true,
+      "windows": 60,
+      "sitting_windows": 0
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "40",
+      "fall": true,
+      "windows": 107,
+      "sitting_windows": 0
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "41",
+      "fall": true,
+      "windows": 118,
+      "sitting_windows": 2
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "42",
+      "fall": true,
+      "windows": 44,
+      "sitting_windows": 1
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "43",
+      "fall": true,
+      "windows": 230,
+      "sitting_windows": 7
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "44",
+      "fall": true,
+      "windows": 35,
+      "sitting_windows": 1
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "45",
+      "fall": true,
+      "windows": 62,
+      "sitting_windows": 0
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "46",
+      "fall": true,
+      "windows": 88,
+      "sitting_windows": 0
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "47",
+      "fall": true,
+      "windows": 234,
+      "sitting_windows": 0
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "48",
+      "fall": true,
+      "windows": 250,
+      "sitting_windows": 49
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "5",
+      "fall": true,
+      "windows": 51,
+      "sitting_windows": 2
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "6",
+      "fall": true,
+      "windows": 70,
+      "sitting_windows": 0
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "7",
+      "fall": true,
+      "windows": 49,
+      "sitting_windows": 5
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "8",
+      "fall": true,
+      "windows": 77,
+      "sitting_windows": 4
+    },
+    {
+      "scene": "Coffee_room_01",
+      "video_id": "9",
+      "fall": true,
+      "windows": 59,
+      "sitting_windows": 0
+    },
+    {
+      "scene": "Coffee_room_02",
+      "video_id": "49",
+      "fall": true,
+      "windows": 155,
+      "sitting_windows": 0
+    },
+    {
+      "scene": "Coffee_room_02",
+      "video_id": "50",
+      "fall": true,
+      "windows": 642,
+      "sitting_windows": 10
+    },
+    {
+      "scene": "Coffee_room_02",
+      "video_id": "51",
+      "fall": true,
+      "windows": 58,
+      "sitting_windows": 1
+    },
+    {
+      "scene": "Coffee_room_02",
+      "video_id": "52",
+      "fall": true,
+      "windows": 62,
+      "sitting_windows": 6
+    },
+    {
+      "scene": "Coffee_room_02",
+      "video_id": "53",
+      "fall": true,
+      "windows": 118,
+      "sitting_windows": 5
+    },
+    {
+      "scene": "Coffee_room_02",
+      "video_id": "54",
+      "fall": true,
+      "windows": 74,
+      "sitting_windows": 0
+    },
+    {
+      "scene": "Coffee_room_02",
+      "video_id": "55",
+      "fall": true,
+      "windows": 98,
+      "sitting_windows": 31
+    },
+    {
+      "scene": "Coffee_room_02",
+      "video_id": "56",
+      "fall": true,
+      "windows": 134,
+      "sitting_windows": 57
+    },
+    {
+      "scene": "Coffee_room_02",
+      "video_id": "57",
+      "fall": true,
+      "windows": 178,
+      "sitting_windows": 9
+    },
+    {
+      "scene": "Coffee_room_02",
+      "video_id": "58",
+      "fall": true,
+      "windows": 94,
+      "sitting_windows": 0
+    },
+    {
+      "scene": "Coffee_room_02",
+      "video_id": "59",
+      "fall": true,
+      "windows": 74,
+      "sitting_windows": 3
+    },
+    {
+      "scene": "Coffee_room_02",
+      "video_id": "60",
+      "fall": true,
+      "windows": 82,
+      "sitting_windows": 2
+    },
+    {
+      "scene": "Coffee_room_02",
+      "video_id": "61",
+      "fall": false,
+      "windows": 429,
+      "sitting_windows": 15
+    },
+    {
+      "scene": "Coffee_room_02",
+      "video_id": "62",
+      "fall": true,
+      "windows": 85,
+      "sitting_windows": 10
+    },
+    {
+      "scene": "Coffee_room_02",
+      "video_id": "63",
+      "fall": false,
+      "windows": 189,
+      "sitting_windows": 0
+    },
+    {
+      "scene": "Coffee_room_02",
+      "video_id": "64",
+      "fall": true,
+      "windows": 61,
+      "sitting_windows": 0
+    },
+    {
+      "scene": "Coffee_room_02",
+      "video_id": "65",
+      "fall": false,
+      "windows": 228,
+      "sitting_windows": 0
+    },
+    {
+      "scene": "Coffee_room_02",
+      "video_id": "66",
+      "fall": false,
+      "windows": 90,
+      "sitting_windows": 0
+    },
+    {
+      "scene": "Coffee_room_02",
+      "video_id": "67",
+      "fall": false,
+      "windows": 106,
+      "sitting_windows": 1
+    },
+    {
+      "scene": "Coffee_room_02",
+      "video_id": "68",
+      "fall": false,
+      "windows": 526,
+      "sitting_windows": 250
+    },
+    {
+      "scene": "Coffee_room_02",
+      "video_id": "69",
+      "fall": false,
+      "windows": 418,
+      "sitting_windows": 0
+    },
+    {
+      "scene": "Coffee_room_02",
+      "video_id": "70",
+      "fall": false,
+      "windows": 270,
+      "sitting_windows": 32
+    },
+    {
+      "scene": "Home_01",
+      "video_id": "1",
+      "fall": true,
+      "windows": 79,
+      "sitting_windows": 16
+    },
+    {
+      "scene": "Home_01",
+      "video_id": "10",
+      "fall": true,
+      "windows": 95,
+      "sitting_windows": 18
+    },
+    {
+      "scene": "Home_01",
+      "video_id": "11",
+      "fall": true,
+      "windows": 95,
+      "sitting_windows": 17
+    },
+    {
+      "scene": "Home_01",
+      "video_id": "12",
+      "fall": true,
+      "windows": 63,
+      "sitting_windows": 44
+    },
+    {
+      "scene": "Home_01",
+      "video_id": "13",
+      "fall": true,
+      "windows": 71,
+      "sitting_windows": 43
+    },
+    {
+      "scene": "Home_01",
+      "video_id": "14",
+      "fall": true,
+      "windows": 87,
+      "sitting_windows": 46
+    },
+    {
+      "scene": "Home_01",
+      "video_id": "15",
+      "fall": true,
+      "windows": 70,
+      "sitting_windows": 52
+    },
+    {
+      "scene": "Home_01",
+      "video_id": "16",
+      "fall": true,
+      "windows": 79,
+      "sitting_windows": 22
+    },
+    {
+      "scene": "Home_01",
+      "video_id": "17",
+      "fall": true,
+      "windows": 71,
+      "sitting_windows": 0
+    },
+    {
+      "scene": "Home_01",
+      "video_id": "18",
+      "fall": true,
+      "windows": 63,
+      "sitting_windows": 14
+    },
+    {
+      "scene": "Home_01",
+      "video_id": "19",
+      "fall": true,
+      "windows": 55,
+      "sitting_windows": 16
+    },
+    {
+      "scene": "Home_01",
+      "video_id": "2",
+      "fall": true,
+      "windows": 71,
+      "sitting_windows": 11
+    },
+    {
+      "scene": "Home_01",
+      "video_id": "20",
+      "fall": true,
+      "windows": 63,
+      "sitting_windows": 19
+    },
+    {
+      "scene": "Home_01",
+      "video_id": "21",
+      "fall": true,
+      "windows": 63,
+      "sitting_windows": 19
+    },
+    {
+      "scene": "Home_01",
+      "video_id": "22",
+      "fall": true,
+      "windows": 71,
+      "sitting_windows": 31
+    },
+    {
+      "scene": "Home_01",
+      "video_id": "23",
+      "fall": true,
+      "windows": 71,
+      "sitting_windows": 26
+    },
+    {
+      "scene": "Home_01",
+      "video_id": "24",
+      "fall": true,
+      "windows": 55,
+      "sitting_windows": 21
+    },
+    {
+      "scene": "Home_01",
+      "video_id": "25",
+      "fall": true,
+      "windows": 62,
+      "sitting_windows": 38
+    },
+    {
+      "scene": "Home_01",
+      "video_id": "26",
+      "fall": true,
+      "windows": 63,
+      "sitting_windows": 23
+    },
+    {
+      "scene": "Home_01",
+      "video_id": "27",
+      "fall": true,
+      "windows": 71,
+      "sitting_windows": 28
+    },
+    {
+      "scene": "Home_01",
+      "video_id": "28",
+      "fall": true,
+      "windows": 63,
+      "sitting_windows": 21
+    },
+    {
+      "scene": "Home_01",
+      "video_id": "29",
+      "fall": true,
+      "windows": 81,
+      "sitting_windows": 32
+    },
+    {
+      "scene": "Home_01",
+      "video_id": "3",
+      "fall": true,
+      "windows": 71,
+      "sitting_windows": 11
+    },
+    {
+      "scene": "Home_01",
+      "video_id": "30",
+      "fall": true,
+      "windows": 55,
+      "sitting_windows": 18
+    },
+    {
+      "scene": "Home_01",
+      "video_id": "4",
+      "fall": true,
+      "windows": 71,
+      "sitting_windows": 23
+    },
+    {
+      "scene": "Home_01",
+      "video_id": "5",
+      "fall": true,
+      "windows": 55,
+      "sitting_windows": 21
+    },
+    {
+      "scene": "Home_01",
+      "video_id": "6",
+      "fall": true,
+      "windows": 55,
+      "sitting_windows": 13
+    },
+    {
+      "scene": "Home_01",
+      "video_id": "7",
+      "fall": true,
+      "windows": 63,
+      "sitting_windows": 10
+    },
+    {
+      "scene": "Home_01",
+      "video_id": "8",
+      "fall": true,
+      "windows": 86,
+      "sitting_windows": 6
+    },
+    {
+      "scene": "Home_01",
+      "video_id": "9",
+      "fall": true,
+      "windows": 103,
+      "sitting_windows": 26
+    },
+    {
+      "scene": "Home_02",
+      "video_id": "31",
+      "fall": true,
+      "windows": 95,
+      "sitting_windows": 38
+    },
+    {
+      "scene": "Home_02",
+      "video_id": "32",
+      "fall": true,
+      "windows": 55,
+      "sitting_windows": 18
+    },
+    {
+      "scene": "Home_02",
+      "video_id": "33",
+      "fall": true,
+      "windows": 55,
+      "sitting_windows": 24
+    },
+    {
+      "scene": "Home_02",
+      "video_id": "34",
+      "fall": true,
+      "windows": 71,
+      "sitting_windows": 37
+    },
+    {
+      "scene": "Home_02",
+      "video_id": "35",
+      "fall": true,
+      "windows": 63,
+      "sitting_windows": 34
+    },
+    {
+      "scene": "Home_02",
+      "video_id": "36",
+      "fall": true,
+      "windows": 55,
+      "sitting_windows": 20
+    },
+    {
+      "scene": "Home_02",
+      "video_id": "37",
+      "fall": true,
+      "windows": 71,
+      "sitting_windows": 25
+    },
+    {
+      "scene": "Home_02",
+      "video_id": "38",
+      "fall": false,
+      "windows": 55,
+      "sitting_windows": 23
+    },
+    {
+      "scene": "Home_02",
+      "video_id": "39",
+      "fall": false,
+      "windows": 55,
+      "sitting_windows": 20
+    },
+    {
+      "scene": "Home_02",
+      "video_id": "40",
+      "fall": false,
+      "windows": 71,
+      "sitting_windows": 36
+    },
+    {
+      "scene": "Home_02",
+      "video_id": "41",
+      "fall": false,
+      "windows": 71,
+      "sitting_windows": 21
+    },
+    {
+      "scene": "Home_02",
+      "video_id": "42",
+      "fall": false,
+      "windows": 47,
+      "sitting_windows": 0
+    },
+    {
+      "scene": "Home_02",
+      "video_id": "43",
+      "fall": false,
+      "windows": 47,
+      "sitting_windows": 10
+    },
+    {
+      "scene": "Home_02",
+      "video_id": "44",
+      "fall": false,
+      "windows": 95,
+      "sitting_windows": 42
+    },
+    {
+      "scene": "Home_02",
+      "video_id": "45",
+      "fall": false,
+      "windows": 63,
+      "sitting_windows": 21
+    },
+    {
+      "scene": "Home_02",
+      "video_id": "46",
+      "fall": false,
+      "windows": 79,
+      "sitting_windows": 21
+    },
+    {
+      "scene": "Home_02",
+      "video_id": "47",
+      "fall": false,
+      "windows": 87,
+      "sitting_windows": 19
+    },
+    {
+      "scene": "Home_02",
+      "video_id": "48",
+      "fall": false,
+      "windows": 71,
+      "sitting_windows": 26
+    },
+    {
+      "scene": "Home_02",
+      "video_id": "49",
+      "fall": false,
+      "windows": 95,
+      "sitting_windows": 45
+    },
+    {
+      "scene": "Home_02",
+      "video_id": "50",
+      "fall": false,
+      "windows": 95,
+      "sitting_windows": 45
+    },
+    {
+      "scene": "Home_02",
+      "video_id": "51",
+      "fall": false,
+      "windows": 79,
+      "sitting_windows": 23
+    },
+    {
+      "scene": "Home_02",
+      "video_id": "52",
+      "fall": false,
+      "windows": 63,
+      "sitting_windows": 18
+    },
+    {
+      "scene": "Home_02",
+      "video_id": "53",
+      "fall": false,
+      "windows": 63,
+      "sitting_windows": 14
+    },
+    {
+      "scene": "Home_02",
+      "video_id": "54",
+      "fall": false,
+      "windows": 63,
+      "sitting_windows": 32
+    },
+    {
+      "scene": "Home_02",
+      "video_id": "55",
+      "fall": false,
+      "windows": 63,
+      "sitting_windows": 35
+    },
+    {
+      "scene": "Home_02",
+      "video_id": "56",
+      "fall": false,
+      "windows": 111,
+      "sitting_windows": 31
+    },
+    {
+      "scene": "Home_02",
+      "video_id": "57",
+      "fall": false,
+      "windows": 71,
+      "sitting_windows": 32
+    },
+    {
+      "scene": "Home_02",
+      "video_id": "58",
+      "fall": false,
+      "windows": 103,
+      "sitting_windows": 24
+    },
+    {
+      "scene": "Home_02",
+      "video_id": "59",
+      "fall": false,
+      "windows": 63,
+      "sitting_windows": 14
+    },
+    {
+      "scene": "Home_02",
+      "video_id": "60",
+      "fall": false,
+      "windows": 95,
+      "sitting_windows": 46
+    },
+    {
+      "scene": "Lecture_room",
+      "video_id": "15",
+      "fall": false,
+      "windows": 188,
+      "sitting_windows": 36
+    },
+    {
+      "scene": "Lecture_room",
+      "video_id": "16",
+      "fall": false,
+      "windows": 281,
+      "sitting_windows": 116
+    },
+    {
+      "scene": "Lecture_room",
+      "video_id": "17",
+      "fall": false,
+      "windows": 159,
+      "sitting_windows": 6
+    },
+    {
+      "scene": "Lecture_room",
+      "video_id": "18",
+      "fall": false,
+      "windows": 341,
+      "sitting_windows": 220
+    },
+    {
+      "scene": "Lecture_room",
+      "video_id": "19",
+      "fall": false,
+      "windows": 263,
+      "sitting_windows": 163
+    },
+    {
+      "scene": "Lecture_room",
+      "video_id": "20",
+      "fall": false,
+      "windows": 90,
+      "sitting_windows": 48
+    },
+    {
+      "scene": "Lecture_room",
+      "video_id": "21",
+      "fall": false,
+      "windows": 367,
+      "sitting_windows": 220
+    },
+    {
+      "scene": "Lecture_room",
+      "video_id": "22",
+      "fall": false,
+      "windows": 320,
+      "sitting_windows": 225
+    },
+    {
+      "scene": "Lecture_room",
+      "video_id": "23",
+      "fall": false,
+      "windows": 216,
+      "sitting_windows": 98
+    },
+    {
+      "scene": "Lecture_room",
+      "video_id": "24",
+      "fall": false,
+      "windows": 471,
+      "sitting_windows": 138
+    },
+    {
+      "scene": "Lecture_room",
+      "video_id": "25",
+      "fall": false,
+      "windows": 116,
+      "sitting_windows": 44
+    },
+    {
+      "scene": "Lecture_room",
+      "video_id": "26",
+      "fall": false,
+      "windows": 467,
+      "sitting_windows": 232
+    },
+    {
+      "scene": "Lecture_room",
+      "video_id": "27",
+      "fall": false,
+      "windows": 77,
+      "sitting_windows": 6
+    },
+    {
+      "scene": "Office",
+      "video_id": "19",
+      "fall": false,
+      "windows": 100,
+      "sitting_windows": 41
+    },
+    {
+      "scene": "Office",
+      "video_id": "20",
+      "fall": false,
+      "windows": 168,
+      "sitting_windows": 1
+    },
+    {
+      "scene": "Office",
+      "video_id": "21",
+      "fall": false,
+      "windows": 133,
+      "sitting_windows": 20
+    },
+    {
+      "scene": "Office",
+      "video_id": "22",
+      "fall": false,
+      "windows": 64,
+      "sitting_windows": 0
+    },
+    {
+      "scene": "Office",
+      "video_id": "23",
+      "fall": false,
+      "windows": 373,
+      "sitting_windows": 168
+    },
+    {
+      "scene": "Office",
+      "video_id": "24",
+      "fall": false,
+      "windows": 267,
+      "sitting_windows": 149
+    },
+    {
+      "scene": "Office",
+      "video_id": "25",
+      "fall": false,
+      "windows": 320,
+      "sitting_windows": 144
+    },
+    {
+      "scene": "Office",
+      "video_id": "26",
+      "fall": false,
+      "windows": 157,
+      "sitting_windows": 0
+    },
+    {
+      "scene": "Office",
+      "video_id": "27",
+      "fall": false,
+      "windows": 261,
+      "sitting_windows": 119
+    },
+    {
+      "scene": "Office",
+      "video_id": "28",
+      "fall": false,
+      "windows": 159,
+      "sitting_windows": 4
+    },
+    {
+      "scene": "Office",
+      "video_id": "29",
+      "fall": false,
+      "windows": 398,
+      "sitting_windows": 22
+    },
+    {
+      "scene": "Office",
+      "video_id": "30",
+      "fall": false,
+      "windows": 406,
+      "sitting_windows": 232
+    },
+    {
+      "scene": "Office",
+      "video_id": "31",
+      "fall": false,
+      "windows": 58,
+      "sitting_windows": 10
+    },
+    {
+      "scene": "Office",
+      "video_id": "32",
+      "fall": false,
+      "windows": 172,
+      "sitting_windows": 100
+    },
+    {
+      "scene": "Office",
+      "video_id": "33",
+      "fall": false,
+      "windows": 204,
+      "sitting_windows": 111
+    }
+  ],
+  "total_windows": 19418
+}

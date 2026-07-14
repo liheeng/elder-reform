@@ -5,3 +5,6 @@ models/
 *.avi
 __pycache__/
 runs/
+
+# Claude local settings (contains local paths and permissions)
+.claude/settings.local.json

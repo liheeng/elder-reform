@@ -17,8 +17,12 @@ class RiskEngineV2:
     CLASS_SITTING = 2
     CLASS_NON_PERSON = 3
 
-    def __init__(self, smooth_alpha=0.4, warning_thres=0.35,
+    def __init__(self, smooth_alpha=0.4, warning_thres=0.40,
                  trigger_frames=10, lock_frames=15):
+        # warning_thres 0.35 -> 0.40 (2026-10): conf 降到 0.02 后，边缘处低分
+        # 静态框(score 0.02-0.06, 关键点均值 0.39-0.47)的风险值稳定落在
+        # 0.37-0.40，恰好在 0.35 之上，使正常视频出现持续的 WARNING。
+        # 详见 docs/tuning-log.md
         self.alpha = smooth_alpha
         self.warning_thres = warning_thres
         self.trigger_frames = trigger_frames

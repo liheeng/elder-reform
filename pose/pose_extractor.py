@@ -191,12 +191,16 @@ class PoseExtractor:
     人体姿态提取器
     """
 
-    def __init__(self, model_path=modelPath, conf=0.05):
+    def __init__(self, model_path=modelPath, conf=0.02):
 
         # 加载YOLO Pose模型
         self.model = YOLO(model_path)
         # [阶段0-fix2] conf 0.25→0.05: 人倒地后 YOLO-Pose 检测置信度大幅下降,
         # 默认 0.25 导致跌倒后检测率仅 5%, 降到 0.05 后提升至 55%
+        # 2026-10: 0.05→0.02。夜间/倒地person框的 bbox 分数常年在 0.01-0.08
+        # 反复穿过 0.05, 导致框闪烁、时有时无; 而低分垃圾框由 _is_valid_person
+        # 的关键点门拦下(实测其关键点均值仅 0.03)。难例集 105 正样本中 28 帧的
+        # 最高分落在 [0.02,0.05), conf=0.05 时全部漏检。详见 docs/tuning-log.md
         self.conf = conf
 
     def extract(self, frame):

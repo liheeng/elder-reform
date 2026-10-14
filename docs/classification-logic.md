@@ -21,7 +21,7 @@
 | 0 | SAFE | 正常行走 / 站立 | Le2i label=1 + Office/Lecture 正常视频 + 跌倒前超出 PRE_FALL 范围的帧 |
 | 1 | FALLEN | 已跌倒 / 躺地 | Le2i label=3/4/7/8 + fall_end 之后 |
 | 2 | SITTING | 坐下 | 自动姿态检测（关节角度规则） + Le2i 标注辅助 |
-| 3 | NON_PERSON | 椅子/沙发等非人误检 | Home_02 家具视频（YOLO 将家具误检为人） |
+| 3 | NON_PERSON | 椅子/沙发等非人误检 | 意图来源为 Home_02 47/57，**但当前数据集该类样本数为 0**（见 `docs/tuning-log.md`） |
 
 ### 1.2 WARNING 的表达方式
 
@@ -56,7 +56,7 @@ Le2i 逐帧标注 status 的含义：
 
 **其他来源**：
 - Office/Lecture_room 确认无跌倒的视频 → 全部 SAFE（含坐姿自动检测生成 SITTING）
-- Home_02 视频 47, 57（YOLO 持续误检为人的家具视频）→ NON_PERSON
+- Home_02 视频 47, 57 → 原计划作为 NON_PERSON，**但实测这两段视频始终有人**，且当前数据集里该类样本数为 0（见 `docs/tuning-log.md`）
 - Pre-VFall 数据集（[Figshare v3](https://figshare.com/articles/dataset/Pre-VFall_Vision_Sensor_Simulated_Early_Signs_of_Fall_Dataset/26488216/3?file=48148606)，DOI `10.6084/m9.figshare.26488216.v3`，CC BY 4.0）合并提供 Fall / Abnormal / Normal 片段
 
 ### 2.2 标签生成入口 `build_dataset_v2.py:get_window_class_and_risk`
@@ -258,13 +258,24 @@ if os.path.exists(pv_x_path):
 
 ### 2.4 NON_PERSON 样本提取
 
-NON_PERSON 类不从标注视频生成，而是从已知的家具误检视频中自动提取：
+> ⚠️ **本节描述与当前数据集不符（2026-10-14 核对）。**
+> `processed/class_labels_v2.npy` 里 class=3 的样本数为 **0**，
+> `class_labels_5class.npy` 里 class=3 同样为 0；当前脚本中也**没有任何给
+> `CLASS_NON_PERSON` 赋值的代码**。另外实测 `Home_02` 视频 47、57 **始终有人**
+> （f1–f288 逐帧可见），并不是"无人家具视频"。详见 `docs/tuning-log.md`。
 
-- **源视频**：Home_02 场景中视频 47、57（YOLO 持续将沙发/椅子检测为人）
+原设计意图如下：
+
+- **源视频**：Home_02 场景中视频 47、57（当时认为 YOLO 持续将沙发/椅子检测为人）
 - **提取流程**：YOLO 提取关键点 → 特征构建 → 滑动窗口 → 全部标为 NON_PERSON
-- **样本量**：约 95 个窗口，每个 (30, 192)
+- **样本量**（`processed/nonperson_meta.json` 记录）：约 95 个窗口，每个 (30, 192) ——
+  **但未见其进入 `processed/` 的训练数组**
 
-这些样本没有对应的真实人体，关键点分布与真人完全不同（集中、低置信度、几乎无运动），模型通过对比学习学会区分"假人"。
+原设想是：这些样本没有对应的真实人体，关键点分布与真人完全不同（集中、低置信度、几乎无运动），
+模型通过对比学习学会区分"假人"。
+
+**因此当前 `NON_PERSON` 类实际上是一个未训练的类**，而"排除物品误检"的职责实际由
+`pose/pose_extractor.py` 的质量门承担 —— 这也解释了该门为何被定得极严。
 
 ### 坐姿判定函数 `is_sitting_posture_v2`
 

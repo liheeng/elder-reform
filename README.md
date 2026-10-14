@@ -173,8 +173,27 @@ elder-master-reformv4/
 │
 ├── configs/                     # 配置目录（待开发）
 ├── docs/                        # 文档
-│   ├── annotation-guide.md      #   逐帧标注指南
-│   └── refactoring-plan.md      #   未来重构计划
+│   ├── architecture.md          #   架构与已知问题详解
+│   ├── classification-logic.md  #   分类逻辑详解
+│   └── tuning-log.md            #   调优记录（现象/根因/改动/效果）
+│
+├── hard_cases/                  # 难例集（夜间/倒地/遮挡场景）
+│   ├── frames/                  #   候选帧（不入 git，可由脚本重新生成）
+│   ├── labels.csv               #   人工标注（person_present 必填，bbox 可选）
+│   └── detections.csv           #   pipeline 与裸 YOLO 的检出基线
+│
+├── scripts/                     # 数据构建与评测脚本
+│   ├── build/
+│   │   ├── extract_keypoints.py     # 预提取 YOLO 关键点缓存
+│   │   ├── build_dataset_v2.py      # V2 数据集构建
+│   │   ├── build_dataset_5class.py  # 5 类数据集构建
+│   │   ├── build_prevfall_dataset.py# Pre-VFall 数据转换
+│   │   └── export_hard_cases.py     # 导出难例/负样本候选帧
+│   └── eval/
+│       ├── verify_real_videos.py    # 跌倒/正常视频回归
+│       ├── verify_issues.py         # P1/P2 回归验证
+│       ├── eval_hard_cases.py       # 难例集检出召回率评测
+│       └── sweep_detection_gate.py  # 检出链阈值扫描（召回 vs 误报）
 │
 ├── PROJECT_DOC.md               # 内部技术文档
 ├── REFORM.md                    # REFORM 重构说明
@@ -182,6 +201,10 @@ elder-master-reformv4/
 ├── README.md                    # 本文件
 └── .opencode/                   # OpenCode AI 配置
 ```
+
+> 注：上表根目录下的 `build_*.py` / `verify_*.py` / `train_*.py` 现已归入 `scripts/build/`、
+> `scripts/eval/`、`scripts/train/`，根目录不再保留这些文件；其余与实现不符的条目见
+> `docs/architecture.md` §6.3。
 
 ---
 
@@ -346,7 +369,7 @@ pip install ultralytics opencv-python numpy scikit-learn scipy
 | SAFE | 0 | 0.0 或指数衰减 | 999 或 time/PRE_FALL | 跌倒前或正常视频 |
 | FALLEN | 1 | 1.0 | 0 | 跌倒结束后或跌倒过程中 |
 | SITTING | 2 | 0.0 | 999 | 窗口内坐姿占比 ≥60% |
-| NON_PERSON | 3 | 0.0 | 999 | 家具视频（Home_02 47, 57） |
+| NON_PERSON | 3 | 0.0 | 999 | 意图来源为 Home_02 47/57，但**当前数据集里该类样本数为 0**，见 [docs/tuning-log.md](docs/tuning-log.md) |
 
 **风险衰减**：对于跌倒前窗口（距跌倒 `PRE_FALL=120` 帧内）：
 ```
@@ -481,14 +504,19 @@ python realtime_detect.py "路径/视频.avi"
 
 ```bash
 # 跌倒视频必须触发 DANGER，正常视频必须保持 SAFE
-python verify_real_videos.py
+python scripts/eval/verify_real_videos.py
 
 # P1（物品误识为人）+ P2（坐下误判为跌倒）分析
-python verify_issues.py
+python scripts/eval/verify_issues.py
 
-# 坐下场景误报扫描
-python scan_sit_videos.py
+# 难例集：夜间/倒地场景的检出召回率（同时报裸 YOLO 与完整 pipeline）
+python scripts/eval/eval_hard_cases.py
+
+# 检出链阈值扫描：量化"放宽质量门"的召回收益与误报代价
+python scripts/eval/sweep_detection_gate.py --list-fp
 ```
+
+每次针对实际运行问题的调优记录（现象/根因/改动/效果）见 [docs/tuning-log.md](docs/tuning-log.md)。
 
 | 测试集 | 视频数 | 预期 | 状态 |
 |----------|--------|----------|--------|

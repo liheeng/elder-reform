@@ -80,11 +80,11 @@ flowchart TD
     end
 
     W -.加载权重.-> CLS
-    style TRK stroke-dasharray: 5 5
 ```
 
-> `PersonTracker` 以虚线标记：它在 `tracker/` 中存在，但**并未被 `realtime_detect.py` 调用**
-> （`person_id` 被硬编码为 `0`）。当前实现实为**单目标**，详见第六节。
+> `PersonTracker` 为**每帧每个目标分配稳定 ID**，`realtime_detect.py` 以该 ID 索引
+> `SequenceBufferV3` 与 `RiskEngineV2`，实现多目标各自独立的时序与状态
+> （见 §9.1，2026-10 已接入）。
 
 ### 2.2 状态机 `RiskEngineV2`
 
@@ -294,9 +294,9 @@ acc[0] = 0,  acc[t] = vel[t] - vel[t-1]  =  pos[t] - 2·pos[t-1] + pos[t-2]
 
 | 路径 | 职责 | 关键点 |
 |---|---|---|
-| `realtime_detect.py` | 推理主循环 | 192 维拼接、无人帧填充、单目标 |
+| `realtime_detect.py` | 推理主循环 | 192 维拼接、跟踪 ID 隔离、目标丢失填充 |
 | `pose/pose_extractor.py` | YOLO26n-Pose 封装 | `conf=0.05`、三重质量门、重叠合并 |
-| `tracker/person_tracker.py` | 质心跟踪 | **未被调用** |
+| `tracker/person_tracker.py` | 质心跟踪 | 最近质心 + IoU 兜底匹配；未确认轨道超时淘汰 |
 | `features/normalize.py` | 关键点归一化 | 髋中心平移 + 身高缩放到 100px |
 | `features/feature_builder_v2.py` | 64 维特征 | 51 + 6 + 7 |
 | `sequence/sequence_buffer.py` | 30 帧滑窗 | per-person deque，NaN 丢弃 |
@@ -429,7 +429,7 @@ PREVFALL_DIR = r"/Volumes/media-backup/AI-data/dataset/falldown/Pre-VFall"   # �
 | 项 | README 描述 | 代码实际 |
 |---|---|---|
 | 版本 | V4 / 5 类 | V2 / 4 类 |
-| 跟踪 | 完整 `PersonTracker` 链路 | **未接入**，`person_id` 硬编码 0（详见 §9.1） |
+| 跟踪 | 完整 `PersonTracker` 链路 | ~~**未接入**，`person_id` 硬编码 0~~ **已接入**（2026-10，详见 §9.1） |
 | 权重 | `models/` 23 个文件 | 目录不存在 |
 | 目录 | 含 `configs/`、`PROJECT_DOC.md` 等 | 不存在 |
 
@@ -441,7 +441,7 @@ PREVFALL_DIR = r"/Volumes/media-backup/AI-data/dataset/falldown/Pre-VFall"   # �
 | `sequence_buffer.py` | `get_velocity/get_acceleration` 与 `realtime_detect.build_192_feature` 逻辑重复 |
 | `build_dataset_v2.py` | `subsample_to_10fps` 内部 `step=1`，实为空操作，函数名误导 |
 | `train_v2.py` | `scaler` 定义在 `main()` 内，`train_fold` 通过全局引用（可运行但不健壮） |
-| `realtime_detect.py` | 多目标场景下所有人共用一个 `person_id=0`，缓冲区互相污染（详见 §9.1） |
+| `realtime_detect.py` | ~~多目标场景下所有人共用一个 `person_id=0`，缓冲区互相污染（详见 §9.1）~~ **已修复**：按 `PersonTracker` 的 ID 分别维护 buffer 与风险引擎 |
 | `realtime_detect.py` | 归一化失败（`bh < 5`）时兜底用**未归一化的原始像素坐标**建特征，属分布外输入 |
 | `feature_builder_v2.py` | `_angle_from_vertical` 已定义但全仓库无任何调用（死代码） |
 | `feature_builder_v2.py` | `torso_angle` 取绝对值导致倾斜**方向信息丢失**（前倾/后仰不可区分） |
@@ -548,7 +548,8 @@ PREVFALL_DIR = r"/Volumes/media-backup/AI-data/dataset/falldown/Pre-VFall"   # �
 
 按性价比排序：
 
-1. **接入 `PersonTracker`**（首选）—— 消除 `person_id` 硬编码，形成"检测 → 跟踪 → 特征 → 时序"完整多目标链路
+1. ~~**接入 `PersonTracker`**（首选）—— 消除 `person_id` 硬编码，形成"检测 → 跟踪 → 特征 → 时序"完整多目标链路~~
+   ✅ **已完成**（2026-10，详见 §9.1；剩余项：质心匹配在跌倒瞬间易断，见 §9.1「陷阱 B」）
 2. 消除 `build_192_feature` 与 `SequenceBufferV3` 的重复实现
 3. 修正 `feat_dim` 默认值
 4. 抽出 `configs/` 集中管理超参
@@ -660,7 +661,26 @@ A 组同时未牺牲原有能力（Le2i 的 0.0 与 1.0 档预测依然准确）
 
 记录已识别、但**当前暂不处理**的改进点，按优先级排列。
 
-### 9.1 多目标支持：当前实为单目标处理（优先级：高）
+### 9.1 多目标支持：当前实为单目标处理（优先级：高）✅ 已修复（2026-10）
+
+> **修复摘要**：`realtime_detect.py` 已接入 `PersonTracker`，以 `track["id"]` 索引
+> `SequenceBufferV3` 与 `RiskEngineV2`，每人各自拥有独立的 30 帧窗口与状态机；
+> `Track` / `PersonTracker` 已透传 `kpts_conf`（陷阱 A 已解决）。
+> 丢失目标的"历史框"显示规则见「建议方案」下的《历史框》小节。
+> 跟踪匹配已加 IoU 兜底与轨道确认（陷阱 B 已缓解）。
+> **仍余**：YOLO 对倒地/夜间场景的漏检，是"丢对象"的主因，见本节末。
+>
+> **实测效果**（合成长镜头 `person_falldown-1.mp4`，老人正常走过斑马线后于第 118–125 帧跌倒）：
+>
+> | | 修复前 | 修复后 |
+> |---|---|---|
+> | 缓冲区相邻条目平均特征差 | 10.12（跨人交替） | 0.85（同一人相邻帧） |
+> | 跌倒前误报 DANGER | 20 次（首个第 108 帧） | **1 次（第 117 帧，即跌倒起始）** |
+> | 跌倒前误判 FALLEN 类 | 31 帧，首个第 90 帧（人还在走路） | 0 |
+> | Le2i 正常视频（7 段） | Office 19–33 / Lecture 15–27 正常，个别段有零星误报 | 全部 0% WARNING/DANGER |
+>
+> 以下为修复前的分析原文，保留作为问题记录。
+
 
 #### 现状
 
@@ -768,33 +788,58 @@ EMA 平滑也在同一帧内被反复施加，等效时间常数随之改变。
 髋部中点位移动幅度中位数仅 1–2px、最大 27px，**未出现 A/B 交替的锯齿**，逐帧选人稳定，
 训练窗口未因选人跳变而混人。
 
-#### 建议方案
+#### 建议方案 ✅ 已实施（2026-10）
 
 改动集中在主循环：
 
-1. 循环外创建一次 `tracker = PersonTracker(max_missing=30, distance_threshold=100)`
+1. 循环外创建一次 `tracker = PersonTracker(max_missing=MISSING_TOLERANCE)`
 2. 每帧 `tracks, removed_ids = tracker.update(persons)`
 3. 遍历 `tracks`（而非 `persons`），用 `track["id"]` 调用 `buffer` 与 `risk_engine`
-4. 对 `removed_ids` 调用 `buffer.remove(tid)` 并清理引擎状态，避免 ID 累积导致内存增长
+4. 对 `removed_ids` 调用 `buffer.remove(tid)` / `risk_engine.remove(tid)` 并清理
+   `last_feature` / `display`，避免 ID 累积导致内存增长
 5. 绘制改用 `track["bbox"]`
+
+实际实现与上表的差异：
+
+| 项 | 说明 |
+|---|---|
+| `max_missing` | 取 `60`（原为 30），对应原 `no_person_frames < 60` 的 "FALL SUSPECTED (target lost)" 容忍窗口 |
+| 目标丢失 | 每帧 `track["missing"] > 0` 时用该 ID 的上一帧特征填充 buffer，防止 velocity 通道跳变 |
+| 丢失后显示 | 仅在**画面里没有任何已检出目标**时绘制灰色虚线历史框（`draw_lost_result`，标注 `lost Nf` 与 `last seen`）；画面里还有活体目标时只保留顶部报警文字。见下「历史框」 |
+| 引擎隔离 | 保留**单个** `RiskEngineV2` 实例（其内部字典本就按 `person_id` 分槽），而非每人一个实例 |
+
+#### 历史框：修复后补充的问题
+
+首次接入后，丢失目标的框仍沿用 `draw_result`（红实线）绘制，且只要 `track["missing"] > 0`
+就画 —— 而原代码只在 `len(persons) == 0` 时画。后果：画面里还有别人时，
+一个停在旧位置的红色 `FALL` 框会继续显示最长 60 帧，容易被误认为实时检测结果。
+
+`person_falldown-3.mp4`（990 帧，含 3 处合集镜头切换）实测：
+
+| | 画历史框的帧 | 其中画面里还有人 | 连续段长度 |
+|---|---|---|---|
+| 接入后（未处理） | 181 | **114** | `[60, 60, 60]` |
+| 现在 | 67 | **0** | `[7, 1, 59]` |
+
+现规则：画面里还有已检出目标 → 只留顶部 `FALL SUSPECTED (target lost)` 文字；
+画面里一个人都没检出 → 画**灰色虚线框**并标注丢失帧数，与实时实线框区分。
+
+> 排查时先怀疑过"复用上一帧特征填充缓冲区"，A/B 实测排除：删掉该行后
+> 第 83 帧的历史框一字不差、连续段仍为 `[60, 60, 60]`。
+> 但填充确有副作用——它对丢失中的 ID 也会 append 冻结特征，使其缓冲区更早凑满 30 帧
+> （同一视频历史框帧数 181→120），而训练侧对漏检帧是零填充后插值，
+> 两者口径不同，仍待处理。
 
 #### 接入前必须解决的两个陷阱
 
-**陷阱 A：`PersonTracker` 会丢掉关键点置信度**
+**陷阱 A：`PersonTracker` 会丢掉关键点置信度** ✅ 已解决
 
-`Track.to_dict()` 返回 `{id, bbox, keypoints, missing, age, hit_count}`，**没有 `kpts_conf`**；
-`create_track` 与 `Track.update` 也都只接收 `bbox` / `keypoints`。
+`Track` 现新增 `kpts_conf` 与 `score` 两个字段，`create_track` / `Track.update` / `to_dict`
+全程透传，`PersonTracker.update` 从检测结果里取值。`build()` 不再静默退化为 `np.ones(17)`。
 
-若直接使用，`person.get("kpts_conf", None)` 得到 `None` → `FeatureBuilderV2.build`
-内部以 `np.ones(17)` 兜底 → **17 个 `conf` 维静默退化为常量 1.0**
-（即 §3.3 的第 1 个坑）。
+**陷阱 B：质心跟踪在跌倒瞬间最容易断** ✅ 已缓解（IoU 兜底匹配）
 
-必须在 `track.py` 与 `person_tracker.py` 中让 conf 跟着走，
-**否则模型静默降级且不报任何错**。
-
-**陷阱 B：质心跟踪在跌倒瞬间最容易断**
-
-匹配为**贪心最近质心**，阈值 `distance_threshold = 100` px，无 IoU 校验、无运动预测：
+原匹配为**贪心最近质心**，阈值 `distance_threshold = 100` px，无 IoU 校验、无运动预测：
 
 ```python
 dist = self.distance(person["bbox"], track.bbox)
@@ -808,12 +853,75 @@ else:
 
 - 新 ID 的 buffer 为空，需再攒 30 帧（25fps 下约 **1.2 秒**）才能推理
 - 而跌倒恰恰发生在这段盲区内
-- 旧 ID 停止更新，`max_missing = 30` 帧后被移除
+- 旧 ID 停止更新，`max_missing` 帧后被移除
 
-此外贪心匹配无全局最优分配，两人靠近时也易**互换 ID**。
+**实测**：在 `person_falldown-3.mp4`（990 帧）上，全片 39 次新建 ID 中有 **8 次**新框与某个已丢失
+轨道 **IoU ≥ 0.3**，而这 8 次中心距离**全部 >100px**（100.1 / 102.2 / 100.6 / 121.3 / 155.7 /
+301.6 / 131.2 / 127.5）。其中 4 次是**真人被正常检测到**（score 0.51–0.91、kpts_conf 和 9.8–14.2）：
 
-**可能的改进方向**（供后续取舍）：放宽 `distance_threshold`、改用 IoU + 质心组合度量、
-引入运动预测（如匀速外推），或对已确认 DANGER 的 ID 加“锁定保护”，禁止其被新 ID 取代。
+| 帧 | 老ID→新ID | IoU | 中心距 | score |
+|---|---|---|---|---|
+| 126 | 8→9 | 0.57 | **100.1px** | 0.76 |
+| 245 | 5→13 | 0.66 | **102.2px** | 0.79 |
+| 265 | 13→16 | 0.44 | **121.3px** | 0.51 |
+| 329 | 16→19 | 0.36 | **301.6px** | 0.91 |
+
+前两次只超了 0.1px 和 2.2px。**修复**：新增 `iou_threshold=0.3` 兜底匹配 ——
+主匹配（质心 < 阈值）失败后，若某轨道与检测框 IoU ≥ 0.3 则仍判为同一目标。
+实测新建 ID 次数 **39 → 31**（正好消掉这 8 次）。
+
+> 顺带纠正一个直觉：同一轨道自身的帧间中心位移**中位数仅 9.1px、最大 94.6px**，
+> 从未越过 100px 阈值。越过阈值的不是"人移得快"，而是"框在变形"（跌倒时下沿下探）
+> 或"框本身是低置信大区域"。
+
+#### 僵尸轨道：单帧垃圾检测
+
+`person_falldown-3.mp4` 上 39 个轨道里有 **11 个（28%）只被匹配过 1 次** ——
+由单帧垃圾检测创建，随后带着 `missing` 一直挂 61 帧才被移除。它们不画框，
+但那个**过期 bbox 会留在匹配池里**，一旦后续检测的中心落进 100px 就会被抢占。
+
+尝试过给 `_is_valid_person` 加 bbox 合理性门（面积占比 / 最小边），**数据上无法设阈值**：
+
+| 判据 | 真人轨道（检出≥5次，n=23） | 单帧垃圾轨道（n=11） |
+|---|---|---|
+| 框最小边 | 161 – 488（中位 293） | 84 – 577（中位 281） |
+| 占画面面积比 | 1.9% – 22.3% | 2.1% – 13.0% |
+| 检测 score | ≥ 0.51 | ≤ 0.21 |
+
+最小边与面积占比都严重重叠（f824 垃圾框占 22.0%/score 0.203，而 f245 **真人**框占 22.3%/score 0.79），
+唯一干净的判据是检测置信度——但那等于把 `conf` 抬回 0.3，与"降到 0.05 以捕捉倒地姿态"的既有决策冲突。
+
+**改用时间维度**：`Track.is_lost()` 对未确认轨道（`hit_count < min_hits=2`）只给
+`max_missing_unconfirmed=15` 帧容忍，超时即移除；已确认轨道仍按 `max_missing` 容忍遮挡。
+15 帧取自实测——真人轨道"丢失后又被找回"的间隔：中位数 2、p90 14、最大 51。
+
+实测僵尸轨道寿命 **61 → 16 帧**（10 个全部）。
+
+#### 回归验证
+
+跟踪改动后，Le2i 跌倒视频的**首次 WARNING / 首次 DANGER 帧与改动前逐帧一致**：
+
+| 视频 | 首 WARNING | 首 DANGER |
+|---|---|---|
+| Office 1 | 289 | 298 |
+| Office 5 | 138 | 147 |
+| Lecture 1 | 129 | 197 |
+| Home_01 1 | 131 | 140 |
+| Home_01 10 | 103 | 112 |
+
+（Office 1 与 Home_01 10 的 DANGER *绘制次数* 下降 49 / 52 次，是因为同一个人此前被多条冗余
+轨道重复画框，现已被 IoU 兜底合并。正常视频 9 段仍全部 0% WARNING/DANGER。）
+
+#### 仍未解决：检测漏检是"丢对象"的主因
+
+跟踪健壮性改进只覆盖了 24% 的断裂。`person_falldown-3.mp4` 全片 **22.4% 的帧零检出**，
+后段有连续 **32 帧**（f797-828）、**23 帧**（f945-967）的整段零检出。f876 画面左下角
+确实有人（蹲/爬在电动车旁），但原始 YOLO 在 `conf=0.01` 下最好的候选是
+`997×210 / conf 0.025` 的巨型区域，**根本没有人的框**。
+
+这属于下文「YOLO 对仰卧/倒地姿态检测失败」的能力问题，需要更贴合的夜间/倒地训练数据，
+不是跟踪层能修的。
+
 
 #### 顺带发现：另一处训练/推理不一致
 

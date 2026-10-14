@@ -36,6 +36,13 @@ class RiskEngineV2:
             self.danger_confirmed[person_id] = False
             self.lock_count[person_id] = 0
 
+    def remove(self, person_id):
+        """清除某人的状态（跟踪器判定该目标已消失时调用）。"""
+        self.smooth_score.pop(person_id, None)
+        self.counter.pop(person_id, None)
+        self.danger_confirmed.pop(person_id, None)
+        self.lock_count.pop(person_id, None)
+
     def _compute_danger_prob(self, class_id, model_risk):
         """融合分类结果和回归风险值。"""
         # 安全关卡：坐姿和非人 → 强制零风险

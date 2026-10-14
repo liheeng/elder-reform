@@ -1,0 +1,117 @@
+video,frame,pipeline_n_det,pipeline_best_score,pipeline_bbox,raw_n_det,raw_best_bbox,raw_best_score,note
+Videos_video_47,80,0,-1.0,(),3,"(56, 23, 85, 139)",0.8635,"neg_candidate:raw_score=0.863,gated=1"
+Videos_video_47,140,0,-1.0,(),3,"(122, 15, 170, 150)",0.9133,"neg_candidate:raw_score=0.913,gated=1"
+Videos_video_47,160,0,-1.0,(),3,"(148, 19, 191, 168)",0.8935,"neg_candidate:raw_score=0.894,gated=1"
+Videos_video_47,180,0,-1.0,(),2,"(170, 20, 223, 180)",0.9025,"neg_candidate:raw_score=0.903,gated=1"
+Videos_video_47,200,0,-1.0,(),3,"(175, 23, 232, 183)",0.9181,"neg_candidate:raw_score=0.918,gated=1"
+Videos_video_47,220,0,-1.0,(),3,"(176, 30, 242, 185)",0.9035,"neg_candidate:raw_score=0.904,gated=1"
+Videos_video_47,240,0,-1.0,(),4,"(184, 60, 247, 160)",0.8922,"neg_candidate:raw_score=0.892,gated=1"
+Videos_video_47,280,0,-1.0,(),3,"(198, 72, 265, 159)",0.8619,"neg_candidate:raw_score=0.862,gated=1"
+Videos_video_57,20,0,-1.0,(),3,"(198, 74, 230, 154)",0.8293,"neg_candidate:raw_score=0.829,gated=1"
+Videos_video_57,40,0,-1.0,(),3,"(195, 85, 240, 156)",0.8084,"neg_candidate:raw_score=0.808,gated=1"
+Videos_video_57,120,0,-1.0,(),3,"(132, 34, 163, 168)",0.876,"neg_candidate:raw_score=0.876,gated=1"
+Videos_video_57,140,0,-1.0,(),4,"(93, 30, 133, 157)",0.8748,"neg_candidate:raw_score=0.875,gated=1"
+Videos_video_57,160,0,-1.0,(),3,"(54, 35, 99, 146)",0.8443,"neg_candidate:raw_score=0.844,gated=1"
+Videos_video_57,180,0,-1.0,(),4,"(43, 50, 84, 135)",0.8052,"neg_candidate:raw_score=0.805,gated=1"
+Videos_video_57,200,0,-1.0,(),5,"(264, 0, 320, 93)",0.0829,"neg_candidate:raw_score=0.083,gated=0"
+Videos_video_57,220,0,-1.0,(),3,"(257, 0, 320, 95)",0.0852,"neg_candidate:raw_score=0.085,gated=0"
+fall_staircase-1,127,1,0.153,"(457, 223, 551, 336)",6,"(457, 223, 551, 336)",0.153,low_score=0.15
+fall_staircase-1,130,1,0.1004,"(453, 218, 552, 472)",3,"(453, 218, 552, 472)",0.1004,low_score=0.10
+fall_staircase-1,131,1,0.0939,"(453, 219, 551, 469)",3,"(453, 219, 551, 469)",0.0939,low_score=0.09
+fall_staircase-1,133,1,0.1604,"(420, 222, 529, 520)",3,"(420, 222, 529, 520)",0.1604,low_score=0.16
+fall_staircase-1,134,1,0.0587,"(345, 290, 491, 515)",4,"(345, 290, 491, 515)",0.0587,low_score=0.06
+fall_staircase-1,135,2,0.2341,"(438, 218, 573, 474)",11,"(438, 218, 573, 474)",0.2341,low_score=0.23
+fall_staircase-1,139,1,0.1679,"(401, 236, 571, 504)",8,"(401, 236, 571, 504)",0.1679,low_score=0.17
+fall_staircase-1,144,1,0.1652,"(356, 286, 570, 515)",2,"(356, 286, 570, 515)",0.1652,low_score=0.17
+fall_staircase-1,145,1,0.0538,"(356, 267, 570, 515)",3,"(356, 267, 570, 515)",0.0538,low_score=0.05
+fall_staircase-1,146,1,0.0527,"(355, 266, 570, 515)",3,"(355, 266, 570, 515)",0.0527,low_score=0.05
+fall_staircase-1,147,1,0.0593,"(359, 281, 569, 514)",3,"(359, 281, 569, 514)",0.0593,low_score=0.06
+fall_staircase-1,163,1,0.1678,"(362, 335, 556, 507)",7,"(362, 335, 556, 507)",0.1678,low_score=0.17
+fall_staircase-1,175,3,0.1654,"(373, 354, 562, 479)",10,"(373, 354, 562, 479)",0.1654,low_score=0.17
+fall_staircase-1,176,3,0.1652,"(373, 354, 563, 479)",10,"(373, 354, 563, 479)",0.1652,low_score=0.17
+fall_staircase-2,166,0,-1.0,(),2,"(131, 202, 335, 527)",0.0472,zero_det_run=3(首)
+fall_staircase-2,167,0,-1.0,(),2,"(131, 202, 335, 527)",0.0434,zero_det_run=3(中)
+fall_staircase-2,168,0,-1.0,(),3,"(132, 184, 333, 512)",0.0262,zero_det_run=3(尾)
+fall_staircase-2,207,0,-1.0,(),4,"(0, 57, 97, 695)",0.0647,zero_det_run=3(首)
+fall_staircase-2,208,0,-1.0,(),5,"(0, 57, 94, 700)",0.0586,zero_det_run=3(中)
+fall_staircase-2,209,0,-1.0,(),5,"(0, 58, 94, 700)",0.0583,zero_det_run=3(尾)
+fall_staircase-2,230,0,-1.0,(),2,"(0, 97, 104, 682)",0.0545,zero_det_run=4(首)
+fall_staircase-2,232,0,-1.0,(),3,"(0, 102, 92, 689)",0.1251,zero_det_run=4(中)
+fall_staircase-2,233,0,-1.0,(),2,"(0, 114, 97, 693)",0.1816,zero_det_run=4(尾)
+fall_staircase-2,235,0,-1.0,(),4,"(0, 110, 106, 663)",0.1051,zero_det_run=5(首)
+fall_staircase-2,237,0,-1.0,(),4,"(0, 114, 107, 662)",0.0691,zero_det_run=5(中)
+fall_staircase-2,239,0,-1.0,(),4,"(0, 101, 114, 670)",0.08,zero_det_run=5(尾)
+fall_staircase-2,249,0,-1.0,(),3,"(259, 3, 428, 203)",0.0765,zero_det_run=92(首)
+fall_staircase-2,295,0,-1.0,(),2,"(0, 99, 146, 692)",0.0414,zero_det_run=92(中)
+person_falldown-1,139,1,0.2252,"(942, 715, 1241, 870)",3,"(942, 715, 1241, 870)",0.2252,low_score=0.23
+person_falldown-1,142,1,0.1675,"(919, 701, 1237, 855)",3,"(919, 701, 1237, 855)",0.1675,low_score=0.17
+person_falldown-1,143,1,0.172,"(904, 703, 1251, 848)",2,"(904, 703, 1251, 848)",0.172,low_score=0.17
+person_falldown-1,144,1,0.1224,"(893, 701, 1232, 848)",3,"(893, 701, 1232, 848)",0.1224,low_score=0.12
+person_falldown-1,145,2,0.0904,"(667, 261, 731, 412)",3,"(667, 261, 731, 412)",0.0904,low_score=0.09
+person_falldown-1,146,1,0.1238,"(867, 693, 1184, 837)",2,"(867, 693, 1184, 837)",0.1238,low_score=0.12
+person_falldown-1,147,1,0.1248,"(857, 690, 1177, 836)",2,"(857, 690, 1177, 836)",0.1248,low_score=0.12
+person_falldown-1,149,2,0.0961,"(847, 674, 1168, 826)",3,"(847, 674, 1168, 826)",0.0961,low_score=0.10
+person_falldown-1,151,2,0.1874,"(835, 671, 1161, 825)",2,"(835, 671, 1161, 825)",0.1874,low_score=0.19
+person_falldown-1,152,2,0.1854,"(824, 663, 1161, 820)",2,"(824, 663, 1161, 820)",0.1854,low_score=0.19
+person_falldown-1,153,2,0.1138,"(816, 664, 1147, 820)",2,"(816, 664, 1147, 820)",0.1138,low_score=0.11
+person_falldown-1,154,2,0.1632,"(809, 661, 1153, 816)",2,"(809, 661, 1153, 816)",0.1632,low_score=0.16
+person_falldown-1,155,1,0.1382,"(802, 655, 1162, 809)",2,"(802, 655, 1162, 809)",0.1382,low_score=0.14
+person_falldown-1,158,2,0.1764,"(778, 643, 1117, 802)",3,"(778, 643, 1117, 802)",0.1764,low_score=0.18
+person_falldown-2,225,1,0.1012,"(856, 792, 1374, 991)",1,"(856, 792, 1374, 991)",0.1012,low_score=0.10
+person_falldown-2,288,1,0.0835,"(944, 763, 1219, 993)",2,"(944, 763, 1219, 993)",0.0835,low_score=0.08
+person_falldown-2,289,1,0.0816,"(944, 763, 1220, 992)",2,"(944, 763, 1220, 992)",0.0816,low_score=0.08
+person_falldown-2,290,1,0.1117,"(947, 758, 1325, 1010)",1,"(947, 758, 1325, 1010)",0.1117,low_score=0.11
+person_falldown-2,291,1,0.1305,"(936, 763, 1356, 1002)",3,"(936, 763, 1356, 1002)",0.1305,low_score=0.13
+person_falldown-2,322,0,-1.0,(),2,"(916, 817, 1339, 989)",0.0318,zero_det_run=3(首)
+person_falldown-2,323,0,-1.0,(),2,"(929, 821, 1299, 994)",0.0322,zero_det_run=3(中)
+person_falldown-2,324,0,-1.0,(),2,"(928, 822, 1291, 993)",0.029,zero_det_run=3(尾)
+person_falldown-2,528,0,-1.0,(),1,"(918, 746, 1091, 947)",0.0332,zero_det_run=6(首)
+person_falldown-2,531,0,-1.0,(),1,"(918, 745, 1091, 946)",0.0408,zero_det_run=6(中)
+person_falldown-2,533,0,-1.0,(),1,"(918, 745, 1092, 947)",0.0492,zero_det_run=6(尾)
+person_falldown-2,535,0,-1.0,(),1,"(919, 744, 1087, 951)",0.0254,zero_det_run=25(首)
+person_falldown-2,547,0,-1.0,(),1,"(925, 745, 1084, 951)",0.0188,zero_det_run=25(中)
+person_falldown-2,559,0,-1.0,(),0,(),-1.0,zero_det_run=25(尾)
+person_falldown-3,73,0,-1.0,(),0,(),-1.0,zero_det_run=7(首)
+person_falldown-3,76,0,-1.0,(),0,(),-1.0,zero_det_run=7(中)
+person_falldown-3,79,0,-1.0,(),0,(),-1.0,zero_det_run=7(尾)
+person_falldown-3,137,0,-1.0,(),2,"(1477, 400, 1581, 838)",0.6241,zero_det_run=11(首)
+person_falldown-3,140,0,-1.0,(),2,"(588, 740, 990, 1077)",0.0732,"neg_candidate:raw_score=0.073,gated=0"
+person_falldown-3,142,0,-1.0,(),1,"(590, 710, 999, 1080)",0.0476,zero_det_run=11(中)
+person_falldown-3,147,0,-1.0,(),1,"(621, 672, 976, 1076)",0.0415,zero_det_run=11(尾)
+person_falldown-3,149,0,-1.0,(),1,"(634, 669, 986, 1069)",0.0171,zero_det_run=28(首)
+person_falldown-3,163,0,-1.0,(),1,"(88, 545, 989, 1080)",0.0107,zero_det_run=28(中)
+person_falldown-3,176,0,-1.0,(),2,"(1511, 353, 1589, 892)",0.4117,zero_det_run=28(尾)
+person_falldown-3,284,0,-1.0,(),2,"(0, 229, 110, 1067)",0.0209,zero_det_run=3(首)
+person_falldown-3,285,0,-1.0,(),2,"(695, 751, 1067, 956)",0.0337,zero_det_run=3(中)
+person_falldown-3,286,0,-1.0,(),3,"(707, 683, 918, 965)",0.0206,zero_det_run=3(尾)
+person_falldown-3,434,0,-1.0,(),4,"(1490, 211, 1616, 504)",0.0995,zero_det_run=78(首)
+person_falldown-3,440,0,-1.0,(),6,"(1241, 18, 1616, 555)",0.4509,"neg_candidate:raw_score=0.451,gated=0"
+person_falldown-3,473,0,-1.0,(),2,"(1525, 238, 1616, 846)",0.2391,zero_det_run=78(中)
+person_falldown-3,500,0,-1.0,(),3,"(0, 705, 103, 1069)",0.0326,"neg_candidate:raw_score=0.033,gated=0"
+person_falldown-3,800,0,-1.0,(),2,"(954, 50, 1616, 1077)",0.1321,"neg_candidate:raw_score=0.132,gated=0"
+person_falldown-3,820,0,-1.0,(),2,"(961, 130, 1609, 711)",0.2407,"neg_candidate:raw_score=0.241,gated=0"
+person_falldown-3,860,0,-1.0,(),1,"(574, 825, 986, 1072)",0.0488,"neg_candidate:raw_score=0.049,gated=0"
+person_falldown-3,880,0,-1.0,(),2,"(448, 916, 590, 1080)",0.0249,"neg_candidate:raw_score=0.025,gated=0"
+person_falldown-3,960,0,-1.0,(),3,"(342, 931, 639, 1080)",0.0175,"neg_candidate:raw_score=0.017,gated=0"
+person_falldown-4,140,0,-1.0,(),3,"(1314, 17, 1366, 644)",0.0518,"neg_candidate:raw_score=0.052,gated=0"
+person_falldown-4,146,0,-1.0,(),4,"(1311, 33, 1366, 659)",0.0342,zero_det_run=3(首)
+person_falldown-4,147,0,-1.0,(),1,"(1313, 34, 1366, 653)",0.0433,zero_det_run=3(中)
+person_falldown-4,148,0,-1.0,(),2,"(1308, 33, 1366, 673)",0.0265,zero_det_run=3(尾)
+person_falldown-4,225,0,-1.0,(),5,"(1315, 27, 1366, 629)",0.061,zero_det_run=3(首)
+person_falldown-4,226,0,-1.0,(),5,"(1315, 27, 1366, 630)",0.0598,zero_det_run=3(中)
+person_falldown-4,227,0,-1.0,(),3,"(1309, 21, 1366, 638)",0.0659,zero_det_run=3(尾)
+person_falldown-4,232,0,-1.0,(),1,"(768, 424, 950, 572)",0.0124,zero_det_run=20(首)
+person_falldown-4,240,0,-1.0,(),3,"(378, 498, 829, 907)",0.026,"neg_candidate:raw_score=0.026,gated=0"
+person_falldown-4,242,0,-1.0,(),2,"(385, 510, 615, 711)",0.0464,zero_det_run=20(中)
+person_falldown-4,251,0,-1.0,(),3,"(377, 449, 840, 898)",0.0226,zero_det_run=20(尾)
+person_falldown-4,254,0,-1.0,(),5,"(1311, 0, 1366, 541)",0.0812,zero_det_run=17(首)
+person_falldown-4,260,0,-1.0,(),4,"(1315, 0, 1366, 564)",0.075,"neg_candidate:raw_score=0.075,gated=0"
+person_falldown-4,262,0,-1.0,(),5,"(1317, 7, 1366, 627)",0.0377,zero_det_run=17(中)
+person_falldown-4,270,0,-1.0,(),5,"(47, 0, 508, 410)",0.0397,zero_det_run=17(尾)
+person_falldown-4,283,0,-1.0,(),1,"(59, 0, 408, 435)",0.0232,zero_det_run=3(首)
+person_falldown-4,284,0,-1.0,(),5,"(362, 0, 574, 415)",0.0451,zero_det_run=3(中)
+person_falldown-4,380,0,-1.0,(),2,"(466, 567, 883, 976)",0.0327,"neg_candidate:raw_score=0.033,gated=0"
+person_falldown-4,680,0,-1.0,(),8,"(0, 381, 695, 1050)",0.4631,"neg_candidate:raw_score=0.463,gated=0"
+person_falldown-4,700,0,-1.0,(),3,"(44, 722, 545, 1052)",0.0546,"neg_candidate:raw_score=0.055,gated=0"
+person_falldown-4,920,0,-1.0,(),9,"(1233, 906, 1366, 1080)",0.244,"neg_candidate:raw_score=0.244,gated=0"
+person_falldown-4,960,0,-1.0,(),4,"(377, 407, 803, 725)",0.0403,"neg_candidate:raw_score=0.040,gated=0"

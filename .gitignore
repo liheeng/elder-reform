@@ -9,3 +9,6 @@ runs/
 # Claude local settings (contains local paths and permissions)
 .claude/settings.local.json
 .conda/
+
+# Hard-case frames (regenerate with scripts/build/export_hard_cases.py)
+hard_cases/frames/

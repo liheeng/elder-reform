@@ -197,18 +197,9 @@ def resolve_model(model):
 
 
 def resolve_device(device):
-    """auto → 有 MPS 用 MPS，有 CUDA 用 CUDA，否则 CPU。"""
-    if device != "auto":
-        return device
-    try:
-        import torch
-        if torch.cuda.is_available():
-            return "cuda"
-        if torch.backends.mps.is_available():
-            return "mps"
-    except Exception:
-        pass
-    return "cpu"
+    """复用 utils.device 的统一设备解析（CUDA -> MPS -> CPU）。"""
+    from utils.device import resolve_device as _resolve
+    return _resolve(device)
 
 
 def main():

@@ -3,12 +3,13 @@ import numpy as np
 import torch
 import torch.nn as nn
 from classifier.risk_classifier import RiskClassifier
+from utils.device import resolve_device
 
 CLASS_NAMES = ["SAFE", "WARNING", "FALLEN", "NON_PERSON", "SITTING"]
 
 class LSTMClassifier:
     def __init__(self, model_path, norm_path, temperature_path=None, device=None):
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = resolve_device(device) if device else resolve_device("auto")
         self.model = RiskClassifier(input_dim=192, num_classes=5)
         sd = torch.load(model_path, map_location=self.device)
         self.model.load_state_dict(sd)

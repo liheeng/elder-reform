@@ -2,13 +2,14 @@ import os
 import numpy as np
 import torch
 from classifier.risk_classifier_v2 import RiskClassifierV2
+from utils.device import resolve_device
 
 CLASS_NAMES = ["SAFE", "FALLEN", "SITTING", "NON_PERSON"]
 PRE_FALL = 120  # 和 build_dataset_v2.py 保持一致
 
 class LSTMClassifierV2:
     def __init__(self, model_path, norm_path, temperature_path=None, device=None):
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = resolve_device(device) if device else resolve_device("auto")
         self.model = RiskClassifierV2(input_dim=192, num_classes=4)
         self.model.load_state_dict(torch.load(model_path, map_location=self.device))
         self.model.to(self.device)

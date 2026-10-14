@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from sequence.sequence_buffer import SequenceBufferV3
 from classifier.lstm_classifier import LSTMClassifier
 from pipeline.risk_engine import RiskEngine
+from utils.device import resolve_device
 
 PROJECT_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 YOLO_MODEL = os.path.join(PROJECT_ROOT, "models", "yolo11n-pose.pt")
@@ -30,6 +31,9 @@ if not os.path.exists(LSTM_MODEL):
 ARCHIVE = r"C:\Users\y'y'x\Downloads\archive"
 WINDOW = 30
 KEYPOINTS_DIR = os.path.join(PROJECT_ROOT, "yolo_keypoints")
+
+# 运行时解析（CUDA -> MPS -> CPU）
+YOLO_DEVICE = resolve_device("auto")
 
 FALL_VIDEOS = [
     ("Home_01", "video (1)",
@@ -80,7 +84,7 @@ def extract_kpts(video_path, scene_name, video_id):
         while True:
             ret, frame = cap.read()
             if not ret: break
-            res = model(frame, verbose=False, device="cuda" if torch.cuda.is_available() else "cpu")
+            res = model(frame, verbose=False, device=YOLO_DEVICE)
             if res[0].keypoints is not None and len(res[0].keypoints) > 0:
                 xy = res[0].keypoints.xy.cpu().numpy()
                 if xy.ndim == 3 and xy.shape[1] == 17:

@@ -11,6 +11,7 @@ from ultralytics import YOLO
 from sequence.sequence_buffer import SequenceBufferV3
 from classifier.lstm_classifier import LSTMClassifier
 from pipeline.risk_engine import RiskEngine
+from utils.device import resolve_device
 
 PROJECT_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 YOLO_MODEL = os.path.join(PROJECT_ROOT, "models", "yolo11n-pose.pt")
@@ -23,6 +24,9 @@ if not os.path.exists(LSTM_MODEL):
 ARCHIVE = r"C:\Users\y'y'x\Downloads\archive"
 WINDOW = 30
 CACHE_DIR = os.path.join(PROJECT_ROOT, "verify_issues_cache")
+
+# 运行时解析（CUDA -> MPS -> CPU）
+YOLO_DEVICE = resolve_device("auto")
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 SAMPLE_PER_SCENE = 8
@@ -118,8 +122,7 @@ def extract_perframe(video_path, conf=0.05, iou=0.5):
         if not ret:
             break
         h, w = frame.shape[:2]
-        res = model(frame, verbose=False, conf=conf, iou=iou,
-                    device="cuda" if torch.cuda.is_available() else "cpu")
+        res = model(frame, verbose=False, conf=conf, iou=iou, device=YOLO_DEVICE)
         persons = []
         if res[0].boxes is not None and len(res[0].boxes) > 0:
             boxes = res[0].boxes.xyxy.cpu().numpy()

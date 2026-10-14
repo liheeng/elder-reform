@@ -28,15 +28,14 @@ from scipy.optimize import minimize_scalar
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 from classifier.risk_classifier import RiskClassifier
-
-scaler = torch.cuda.amp.GradScaler()
+from utils.device import get_device, autocast_context, make_grad_scaler
 
 PROCESSED_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "processed")
 MODEL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "models")
 os.makedirs(MODEL_DIR, exist_ok=True)
 
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(f"Device: {DEVICE}")
+DEVICE = get_device()
+SCALER = make_grad_scaler(DEVICE)
 
 EPOCHS = 50
 BATCH_SIZE = 256
@@ -136,14 +135,14 @@ def train_fold(train_loader, val_loader, class_weights, fold_id):
         for X_batch, y_batch in train_loader:
             X_batch, y_batch = X_batch.to(DEVICE, non_blocking=True), y_batch.to(DEVICE, non_blocking=True)
             optimizer.zero_grad()
-            with torch.cuda.amp.autocast():
+            with autocast_context(DEVICE):
                 logits = model(X_batch)
                 loss = criterion(logits, y_batch)
-            scaler.scale(loss).backward()
-            scaler.unscale_(optimizer)
+            SCALER.scale(loss).backward()
+            SCALER.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
-            scaler.step(optimizer)
-            scaler.update()
+            SCALER.step(optimizer)
+            SCALER.update()
             train_loss += loss.item() * len(X_batch)
         train_loss /= n_train
 
@@ -153,7 +152,7 @@ def train_fold(train_loader, val_loader, class_weights, fold_id):
         with torch.no_grad():
             for X_batch, y_batch in val_loader:
                 X_batch, y_batch = X_batch.to(DEVICE, non_blocking=True), y_batch.to(DEVICE, non_blocking=True)
-                with torch.cuda.amp.autocast():
+                with autocast_context(DEVICE):
                     logits = model(X_batch)
                     loss = criterion(logits, y_batch)
                 val_loss += loss.item() * len(X_batch)
@@ -345,14 +344,14 @@ def main():
         for X_batch, y_batch in full_loader:
             X_batch, y_batch = X_batch.to(DEVICE, non_blocking=True), y_batch.to(DEVICE, non_blocking=True)
             optimizer.zero_grad()
-            with torch.cuda.amp.autocast():
+            with autocast_context(DEVICE):
                 logits = model(X_batch)
                 loss = criterion(logits, y_batch)
-            scaler.scale(loss).backward()
-            scaler.unscale_(optimizer)
+            SCALER.scale(loss).backward()
+            SCALER.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
-            scaler.step(optimizer)
-            scaler.update()
+            SCALER.step(optimizer)
+            SCALER.update()
             train_loss += loss.item() * len(X_batch)
         train_loss /= n_full
 

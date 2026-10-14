@@ -168,7 +168,8 @@ elder-master-reformv4/
 │   ├── risk_labels_v2.npy       #   V2 风险回归标签
 │   └── x.npy                    #   5 类特征 (N, 30, 192)
 │
-├── yolo_keypoints/              # 预提取的 YOLO 关键点（约 380 个文件）
+├── yolo_keypoints/              # 预提取的 YOLO 关键点（190 视频 × 2 = 380 个文件）
+│                                #   由 scripts/build/extract_keypoints.py 生成
 │
 ├── configs/                     # 配置目录（待开发）
 ├── docs/                        # 文档
@@ -295,11 +296,48 @@ pip install ultralytics opencv-python numpy scikit-learn scipy
 
 ### 数据来源
 
-| 数据集 | 场景 | 视频数 | 说明 |
-|---------|--------|--------|-------------|
-| **Le2i** | Coffee_room_01/02, Home_01/02 | ~130 | 多场景跌倒视频，含逐帧标注 |
-| **Le2i 正常** | Lecture_room, Office | ~28 | 确认无跌倒的正常视频 |
-| **Pre-VFall** | — | 不定 | OpenPose 格式的预跌倒数据集 |
+| 数据集 | 场景 | 视频数 | 获取地址 | 说明 |
+|---------|--------|--------|--------|-------------|
+| **Le2i** | Coffee_room_01/02, Home_01/02 | ~130 | [Kaggle: falldataset-imvia](https://www.kaggle.com/datasets/tuyenldvn/falldataset-imvia) | 多场景跌倒视频，含逐帧标注 |
+| **Le2i 正常** | Lecture_room, Office | ~28 | 同上（同一数据集内的未跌倒场景） | 确认无跌倒的正常视频 |
+| **Pre-VFall** | — | 不定 | [Figshare v3（Pre-VFall.zip）](https://figshare.com/articles/dataset/Pre-VFall_Vision_Sensor_Simulated_Early_Signs_of_Fall_Dataset/26488216/3?file=48148606) | OpenPose 格式的预跌倒数据集 |
+
+**Le2i 目录结构**（`build_dataset_v2.py` 的 `ARCHIVE` 需指向这一层）：
+
+```
+<ARCHIVE>/                          # 例: /Volumes/media-backup/AI-data/falldown/Le2i-v2
+├── Coffee_room_01/Coffee_room_01/{Videos,Annotation_files}/
+├── Coffee_room_02/Coffee_room_02/{Videos,Annotations_files}/   # 注意是 Annotations_files
+├── Home_01/Home_01/{Videos,Annotation_files}/
+├── Home_02/Home_02/{Videos,Annotation_files}/
+├── Lecture_room/Lecture room/       # 无标注（正常场景）
+└── Office/Office/                   # 无标注（正常场景）
+```
+
+实测该数据集：**190 个 `.avi`**（320×240, 25 FPS）、**130 份逐帧标注 `.txt`**（Coffee_room_01 48 / Coffee_room_02 22 / Home_01 30 / Home_02 30）、约 16 GB。视频文件名形如 `video (i).avi`，标注为 `video (i).txt`，第 1 行 `fall_start`、第 2 行 `fall_end`，其后每行 `帧号,status,...`。
+
+**Pre-VFall 实况**：本项目使用 **v3**（`Pre-VFall.zip`，21,083,952,708 B，MD5 `45dc0cc5134ea3a9120b81271dd6ae5e`，约 19.6 GB，CC BY 4.0）：
+- 下载页 <https://figshare.com/articles/dataset/Pre-VFall_Vision_Sensor_Simulated_Early_Signs_of_Fall_Dataset/26488216/3?file=48148606>
+- 直链 <https://ndownloader.figshare.com/files/48148606>（支持 `curl -C -` 断点续传）
+- DOI `10.6084/m9.figshare.26488216.v3`；最新版 v5 为 `Pre-VFall.rar`（21,096,978,752 B，MD5 `0308622d728063f8513367d823e07c2a`），二者内容同源，但 `.rar` 需额外解压工具
+
+解压后**已含逐帧 OpenPose JSON**，无需自行生成。结构为 `<场景>/<受试者>/<受试者>-{Normal|Abnormal|Fall}-json/_<受试者>_<帧号>_keypoints.json`，实测 20 GB：
+
+| 场景 | 受试者 | 段目录 | JSON 数 |
+|---|---|---|---|
+| confusion_delirium | 18 | 37 | 4,486 |
+| confusion_nph | 18 | 36 | 4,262 |
+| dizziness_fall_forward | 18 | 54 | 3,458 |
+| dizziness_fall_side | 18 | 54 | 3,403 |
+| weakness_fall_forward | 18 | 52 | 3,932 |
+| weakness_fall_side | 18 | 54 | 3,018 |
+| **合计** | **108** | **287** | **22,559** |
+
+两点命名陷阱（脚本已兼容，勿用旧版 `f"{subject}-{segment}-json"` 硬拼）：
+1. **`confusion_delirium` 整个场景用下划线**（`CLSM9_Normal-json`），其余 5 个场景用连字符；
+2. `confusion_delirium/CLFM2/` 下混有一份 `CLFM1_Abnormal-json`（数据自身错位），脚本按"前缀须与受试者名一致"跳过它，避免错记；`CLFM1` 自身仍有该段落目录，不会丢数据。
+
+`confusion_*` 两个场景无 Fall 段（36 个受试者），另有 42 个段落不足 30 帧，均会被跳过并打印明细。转换产物：**4888 个窗口**（risk=0.0 2908 / 0.5 1806 / 1.0 174），风险回归头的 `0.5` 档由此而来。
 
 ### 标签方案（V2）
 
@@ -318,14 +356,17 @@ risk = exp(-剩余时间 / TAU),  TAU=50
 ### 构建数据集
 
 ```bash
+# 0. 预提取关键点缓存（只需在首次、或更换视频/权重时执行）
+python scripts/build/extract_keypoints.py
+
 # V2 数据集（4 类 + 风险 + 时间）
 python build_dataset_v2.py
 
 # 5 类数据集（含 SITTING 类）
 python build_dataset_5class.py
 
-# Pre-VFall 转换
-python build_prevfall_dataset.py
+# Pre-VFall 转换（--data-dir 指向解压后的 Pre-VFall 根目录）
+python scripts/build/build_prevfall_dataset.py --data-dir /path/to/Pre-VFall
 ```
 
 ---
@@ -528,8 +569,20 @@ python scan_sit_videos.py
 
 ## 参考
 
-- **Le2i 数据集**：多场景跌倒检测数据集（含视频与逐帧标注）
-- **Pre-VFall 数据集**：预跌倒检测数据集（OpenPose 格式）
+### 数据集
+
+- **Le2i Fall Detection Dataset**（IMVIA / 法国第戎大学 LE2I UMR6306）：
+  下载 [Kaggle: tuyenldvn/falldataset-imvia](https://www.kaggle.com/datasets/tuyenldvn/falldataset-imvia)
+  引用：
+  > I. Charfi, J. Mitéran, J. Dubois, M. Atri, R. Tourki, "Optimised spatio-temporal descriptors for real-time fall detection: comparison of SVM and Adaboost based classification", *Journal of Electronic Imaging (JEI)*, Vol. 22, Issue 4, pp. 17, October 2013.
+
+- **Pre-VFall: Vision Sensor Simulated Early Signs of Fall Dataset**（C. C. Olisah, X. Yang）：
+  本项目使用 **v3**：下载页 <https://figshare.com/articles/dataset/Pre-VFall_Vision_Sensor_Simulated_Early_Signs_of_Fall_Dataset/26488216/3?file=48148606>，DOI `10.6084/m9.figshare.26488216.v3`，
+  文件 `Pre-VFall.zip`（21,083,952,708 B，MD5 `45dc0cc5134ea3a9120b81271dd6ae5e`），许可 CC BY 4.0。
+  > 引用时请写明实际使用的版本；最新版 v5 为 `Pre-VFall.rar`（21,096,978,752 B，MD5 `0308622d728063f8513367d823e07c2a`），内容同源。
+
+### 代码
+
 - **YOLO11**：Ultralytics YOLO11 - [https://github.com/ultralytics/ultralytics](https://github.com/ultralytics/ultralytics)
 - **PyTorch LSTM**：[https://pytorch.org/docs/stable/generated/torch.nn.LSTM.html](https://pytorch.org/docs/stable/generated/torch.nn.LSTM.html)
 

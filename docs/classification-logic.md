@@ -41,7 +41,7 @@ SAFE(类0) ─── risk 值连续上升 ───→ DANGER 状态
 
 ### 2.1 数据来源
 
-**Le2i 数据集标注格式**：
+**Le2i 数据集**（[Kaggle: falldataset-imvia](https://www.kaggle.com/datasets/tuyenldvn/falldataset-imvia)）标注格式：
 
 ```
 第1行: fall_start   (跌倒开始帧号)
@@ -57,7 +57,7 @@ Le2i 逐帧标注 status 的含义：
 **其他来源**：
 - Office/Lecture_room 确认无跌倒的视频 → 全部 SAFE（含坐姿自动检测生成 SITTING）
 - Home_02 视频 47, 57（YOLO 持续误检为人的家具视频）→ NON_PERSON
-- Pre-VFall 数据集合并提供 Fall / Abnormal / Normal 片段
+- Pre-VFall 数据集（[Figshare v3](https://figshare.com/articles/dataset/Pre-VFall_Vision_Sensor_Simulated_Early_Signs_of_Fall_Dataset/26488216/3?file=48148606)，DOI `10.6084/m9.figshare.26488216.v3`，CC BY 4.0）合并提供 Fall / Abnormal / Normal 片段
 
 ### 2.2 标签生成入口 `build_dataset_v2.py:get_window_class_and_risk`
 
@@ -176,7 +176,9 @@ return CLASS_SAFE, RISK_SAFE, NORMAL_TIME
 
 ### 2.3 Pre-VFall 数据集处理
 
-Pre-VFall 数据集使用 OpenPose 格式，每个片段以独立目录存放 JSON 文件，需要通过格式转换和分段标注才能合并到 V2 训练集。
+Pre-VFall 数据集（[Figshare v3](https://figshare.com/articles/dataset/Pre-VFall_Vision_Sensor_Simulated_Early_Signs_of_Fall_Dataset/26488216/3?file=48148606)，DOI `10.6084/m9.figshare.26488216.v3`，CC BY 4.0）**解压后已含逐帧 OpenPose JSON**，无需自行生成。每个片段以独立目录存放，需要通过格式转换和分段标注才能合并到 V2 训练集。
+
+> **命名陷阱**：段落目录有两种分隔符 —— `confusion_delirium` 用下划线（`CLSM9_Normal-json`），其余 5 个场景用连字符（`FWSFM1-Fall-json`）。另有 `confusion_delirium/CLFM2/CLFM1_Abnormal-json` 一处数据自身错位，需按前缀一致性跳过。
 
 **OpenPose → COCO 关键点转换**：
 

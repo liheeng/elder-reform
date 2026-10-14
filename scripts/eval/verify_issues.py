@@ -1,7 +1,7 @@
 """
 verify_issues.py [REFORM 版]
 
-多场景验�? 检�?P1(物品误识为人) + P2(坐下误识为跌�?.
+多场景验证 检查P1(物品误识为人) + P2(坐下误识为跌倒.
 """
 
 import os, sys, cv2, json, pickle, random, numpy as np, torch

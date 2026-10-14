@@ -1,7 +1,7 @@
 """
 verify_real_videos.py [REFORM 版]
 
-回归验证: 跌倒视频应触发 DANGER, 正常视频应保�?SAFE.
+回归验证: 跌倒视频应触发 DANGER, 正常视频应保持SAFE.
 """
 
 import os
@@ -65,10 +65,10 @@ NORMAL_VIDEOS = [
 
 
 def extract_kpts(video_path, scene_name, video_id):
-    """从训练数据缓存加载关键点（与训练时完全一致）�?""
+    """从训练数据缓存加载关键点（与训练时完全一致）。"""
     kp_path = os.path.join(KEYPOINTS_DIR, f"{scene_name}_video_{video_id}_keypoints.npy")
     if not os.path.exists(kp_path):
-        # 无缓存时�?YOLO 提取
+        # 无缓存时用YOLO 提取
         from ultralytics import YOLO
         import torch
         model = YOLO(YOLO_MODEL)
@@ -158,7 +158,7 @@ def main():
     print(f"Model: {os.path.basename(LSTM_MODEL)}")
 
     print(f"\n{'='*40}")
-    print("A. 跌倒视�?�?应触�?DANGER")
+    print("A. 跌倒视频→应触发DANGER")
     print(f"{'='*40}")
     fall_pass = fall_total = 0
     for scene, vid, vpath, apath in FALL_VIDEOS:
@@ -177,7 +177,7 @@ def main():
         print(f"DANGER={danger:3d}  max_risk={max_risk:.3f}  {'PASS' if ok else 'FAIL'}")
 
     print(f"\n{'='*40}")
-    print("B. 正常视频 �?不应 DANGER")
+    print("B. 正常视频 →不应 DANGER")
     print(f"{'='*40}")
     normal_pass = normal_total = 0
     for scene, vid, vpath in NORMAL_VIDEOS:
@@ -198,7 +198,7 @@ def main():
     print(f"\n{'='*76}")
     print("总结")
     print(f"{'='*76}")
-    print(f"  跌倒视�? {fall_pass}/{fall_total}  (目标: 全部PASS)")
+    print(f"  跌倒视频 {fall_pass}/{fall_total}  (目标: 全部PASS)")
     print(f"  正常视频: {normal_pass}/{normal_total}  (目标: 全部PASS)")
     overall = "PASS" if (fall_pass == fall_total and normal_pass == normal_total) else "FAIL"
     print(f"  总体: {overall}")

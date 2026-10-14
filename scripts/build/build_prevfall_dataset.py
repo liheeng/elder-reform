@@ -30,23 +30,23 @@ RISK_FALL = 1.0
 NORMAL_TIME = 999
 
 OPENPOSE_TO_COCO = {
-    0: 0,    # Nose �?Nose
-    16: 1,   # LEye �?LEye
-    15: 2,   # REye �?REye
-    18: 3,   # LEar �?LEar
-    17: 4,   # REar �?REar
-    5: 5,    # LShoulder �?LShoulder
-    2: 6,    # RShoulder �?RShoulder
-    6: 7,    # LElbow �?LElbow
-    3: 8,    # RElbow �?RElbow
-    7: 9,    # LWrist �?LWrist
-    4: 10,   # RWrist �?RWrist
-    12: 11,  # LHip �?LHip
-    9: 12,   # RHip �?RHip
-    13: 13,  # LKnee �?LKnee
-    10: 14,  # RKnee �?RKnee
-    14: 15,  # LAnkle �?LAnkle
-    11: 16,  # RAnkle �?RAnkle
+    0: 0,    # Nose →Nose
+    16: 1,   # LEye →LEye
+    15: 2,   # REye →REye
+    18: 3,   # LEar →LEar
+    17: 4,   # REar →REar
+    5: 5,    # LShoulder →LShoulder
+    2: 6,    # RShoulder →RShoulder
+    6: 7,    # LElbow →LElbow
+    3: 8,    # RElbow →RElbow
+    7: 9,    # LWrist →LWrist
+    4: 10,   # RWrist →RWrist
+    12: 11,  # LHip →LHip
+    9: 12,   # RHip →RHip
+    13: 13,  # LKnee →LKnee
+    10: 14,  # RKnee →RKnee
+    14: 15,  # LAnkle →LAnkle
+    11: 16,  # RAnkle →RAnkle
 }
 
 def convert_openpose_to_coco(pose_keypoints_2d):
@@ -116,7 +116,7 @@ def main():
     for scene_name in SCENES:
         scene_path = os.path.join(PREVFALL_DIR, scene_name)
         if not os.path.isdir(scene_path):
-            print(f"[跳过] {scene_path} 不存�?)
+            print(f"[跳过] {scene_path} 不存在")
             continue
 
         subjects = sorted([d for d in os.listdir(scene_path)
@@ -153,7 +153,7 @@ def main():
                     all_ids.append([SCENE_ID, subject_counter])
 
     if len(all_x) == 0:
-        print("错误：没有生成任�?prevfall 样本�?)
+        print("错误：没有生成任何prevfall 样本？")
         sys.exit(1)
 
     xs = np.stack(all_x).astype(np.float32)

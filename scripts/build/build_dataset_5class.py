@@ -15,8 +15,8 @@ from features.feature_builder_v2 import FeatureBuilderV2, interpolate_missing_fr
 from features.normalize import normalize_keypoints
 
 PROJECT_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
-ARCHIVE = r"C:\Users\y'y'x\Downloads\archive"
-KEYPOINTS_DIR = os.path.join(PROJECT_ROOT, "yolo_keypoints")
+ARCHIVE = r"/Volumes/media-backup/AI-data/falldown/Le2i-v2"
+KEYPOINTS_DIR = os.path.join(PROJECT_ROOT, "dataset/yolo_keypoints")
 PROCESSED_DIR = os.path.join(PROJECT_ROOT, "processed")
 
 WINDOW_SIZE = 30
@@ -134,7 +134,7 @@ def is_sitting_posture(keypoints):
 
 
 def subsample_to_10fps(keypoints, confs, orig_fps=25.0):
-    # step=1: Ô­ÉúÖ¡ÂÊ, ²»×Ó²ÉÑù
+    # step=1: åŸç”Ÿå¸§ç‡, ä¸å­é‡‡æ ·
     T = keypoints.shape[0]
     step = 1
     indices = np.arange(0, T, step).astype(int)
@@ -174,29 +174,29 @@ def parse_annotation_perframe(anno_path):
 
 def get_window_class(frame_labels, start, end, fall_start, fall_end, raw_keypoints, subsample_indices):
     """
-    5-class ´°¿ÚÀà±ğÅĞ¶¨ (ÑÏ¸ñ×ñÑ­Ô­°æ classify_window_v5 µÄË³Ğò).
-    ÓÅÏÈ¼¶:
-      1. fall_end ºóµÄÖ¡ ¡ú FALLEN
-      2. ×ø×Ë¼ì²â ¡ú SITTING
-      3. Le2i ÖğÖ¡±ê×¢ÖÚÊıÍ¶Æ±
-      4. »ØÍË: risk ¹«Ê½ WARNING = [fall_start-90, fall_end)
-      5. ¡ú SAFE
+    5-class çª—å£ç±»åˆ«åˆ¤å®š (ä¸¥æ ¼éµå¾ªåŸç‰ˆ classify_window_v5 çš„é¡ºåº).
+    ä¼˜å…ˆçº§:
+      1. fall_end åçš„å¸§ â†’ FALLEN
+      2. åå§¿æ£€æµ‹ â†’ SITTING
+      3. Le2i é€å¸§æ ‡æ³¨ä¼—æ•°æŠ•ç¥¨
+      4. å›é€€: risk å…¬å¼ WARNING = [fall_start-90, fall_end)
+      5. â†’ SAFE
     """
     last_orig_idx = subsample_indices[end - 1]
 
-    # 1. FALLEN: ÔÚ fall_end Ö®ºó (º¬½Ó´¥µØÃæºó)
+    # 1. FALLEN: åœ¨ fall_end ä¹‹å (å«æ¥è§¦åœ°é¢å)
     if fall_start is not None and fall_end is not None:
         if last_orig_idx >= fall_end:
             return CLASS_FALLEN
 
-    # 1.5 µøµ¹¹ı³ÌÖĞ ¡ú FALLEN (×îºóÒ»Ö¡±êÇ©È·ÈÏ¼´±êFALLEN)
+    # 1.5 è·Œå€’è¿‡ç¨‹ä¸­ â†’ FALLEN (æœ€åä¸€å¸§æ ‡ç­¾ç¡®è®¤å³æ ‡FALLEN)
     if fall_start is not None and fall_end is not None:
         if fall_start <= last_orig_idx < fall_end:
             ol = frame_labels.get(last_orig_idx) if frame_labels else None
             if ol is not None and ol in (3, 4, 7, 8):
                 return CLASS_FALLEN
 
-    # 2. SITTING: ´°¿Úºó¶ÎÖ¡×ø×Ë¼ì²â
+    # 2. SITTING: çª—å£åæ®µå¸§åå§¿æ£€æµ‹
     window_len = end - start
     check_start = max(0, window_len - 10)
     sitting_count = 0
@@ -209,9 +209,9 @@ def get_window_class(frame_labels, start, end, fall_start, fall_end, raw_keypoin
     if check_frames > 0 and sitting_count >= check_frames * 0.6:
         return CLASS_SITTING
 
-    # 3. Le2i ÖğÖ¡±ê×¢£º½öÓÃÓÚ SITTING ¼ì²â¸¨Öú£¬²»ÔÙÓÃÓÚ FALLEN/WARNING
-    # FALLEN ÓÉ Step 1 (fall_end) ºÍ Step 4 (»ØÍË) ¾ö¶¨
-    # WARNING ÓÉ Pre-VFall Êı¾İÌá¹©£¬Le2i ²»²úÉú WARNING
+    # 3. Le2i é€å¸§æ ‡æ³¨ï¼šä»…ç”¨äº SITTING æ£€æµ‹è¾…åŠ©ï¼Œä¸å†ç”¨äº FALLEN/WARNING
+    # FALLEN ç”± Step 1 (fall_end) å’Œ Step 4 (å›é€€) å†³å®š
+    # WARNING ç”± Pre-VFall æ•°æ®æä¾›ï¼ŒLe2i ä¸äº§ç”Ÿ WARNING
     if frame_labels:
         sitting_count = 0
         for t_s in range(start, end):
@@ -223,7 +223,7 @@ def get_window_class(frame_labels, start, end, fall_start, fall_end, raw_keypoin
         if sitting_count >= (end - start) * 0.5:
             return CLASS_SITTING
 
-    # 4. »ØÍË: Ö»ÅĞ¶¨ FALLEN vs SAFE£¨WARNING ÓÉ Pre-VFall Ìá¹©£©
+    # 4. å›é€€: åªåˆ¤å®š FALLEN vs SAFEï¼ˆWARNING ç”± Pre-VFall æä¾›ï¼‰
     if fall_start is not None and fall_end is not None:
         if last_orig_idx >= fall_end:
             return CLASS_FALLEN
@@ -275,7 +275,7 @@ def main():
         scene_id = SCENE_ID_MAP[scene_name]
 
         if not os.path.isdir(video_dir):
-            print(f"[Ìø¹ı] ÊÓÆµÄ¿Â¼²»´æÔÚ: {video_dir}")
+            print(f"[è·³è¿‡] è§†é¢‘ç›®å½•ä¸å­˜åœ¨: {video_dir}")
             continue
 
         video_files = sorted([f for f in os.listdir(video_dir) if f.endswith(".avi")])
@@ -287,7 +287,7 @@ def main():
             cf_path = os.path.join(KEYPOINTS_DIR, f"{scene_name}_video_{video_id}_confs.npy")
 
             if not os.path.exists(kp_path):
-                print(f"  Ìø¹ı video {video_id} (ÎŞ keypoints »º´æ)")
+                print(f"  è·³è¿‡ video {video_id} (æ—  keypoints ç¼“å­˜)")
                 continue
 
             raw_keypoints = np.load(kp_path)
@@ -341,7 +341,7 @@ def main():
         scene_id = SCENE_ID_MAP[scene_name]
 
         if not os.path.isdir(video_dir):
-            print(f"[Ìø¹ı] Ä¿Â¼²»´æÔÚ: {video_dir}")
+            print(f"[è·³è¿‡] ç›®å½•ä¸å­˜åœ¨: {video_dir}")
             continue
 
         video_files = sorted([f for f in os.listdir(video_dir) if f.endswith(".avi")])
@@ -356,7 +356,7 @@ def main():
             cf_path = os.path.join(KEYPOINTS_DIR, f"{scene_name}_video_{video_id}_confs.npy")
 
             if not os.path.exists(kp_path):
-                print(f"  Ìø¹ı video {video_id} (ÎŞ keypoints »º´æ)")
+                print(f"  è·³è¿‡ video {video_id} (æ—  keypoints ç¼“å­˜)")
                 continue
 
             raw_keypoints = np.load(kp_path)
@@ -410,7 +410,7 @@ def main():
             print(f"  video {video_id}: {scene_windows} windows, sitting={sitting_windows}")
 
     if len(all_x) == 0:
-        print("\n´íÎó: Ã»ÓĞÉú³ÉÈÎºÎÑµÁ·Ñù±¾!")
+        print("\né”™è¯¯: æ²¡æœ‰ç”Ÿæˆä»»ä½•è®­ç»ƒæ ·æœ¬!")
         sys.exit(1)
 
     xs = np.stack(all_x)
@@ -427,17 +427,17 @@ def main():
 
     total = len(all_x)
     print(f"\n{'='*60}")
-    print("5-class ÑµÁ·Êı¾İÉú³ÉÍê³É")
+    print("5-class è®­ç»ƒæ•°æ®ç”Ÿæˆå®Œæˆ")
     print(f"{'='*60}")
-    print(f"  ×ÜÑù±¾Êı: {total}")
-    print(f"  ÌØÕ÷ĞÎ×´: {xs.shape}")
+    print(f"  æ€»æ ·æœ¬æ•°: {total}")
+    print(f"  ç‰¹å¾å½¢çŠ¶: {xs.shape}")
     print(f"  SAFE(0):      {stats.get(CLASS_SAFE, 0):>6}  ({stats.get(CLASS_SAFE,0)/total*100:5.1f}%)")
     print(f"  WARNING(1):   {stats.get(CLASS_WARNING, 0):>6}  ({stats.get(CLASS_WARNING,0)/total*100:5.1f}%)")
     print(f"  FALLEN(2):    {stats.get(CLASS_FALLEN, 0):>6}  ({stats.get(CLASS_FALLEN,0)/total*100:5.1f}%)")
     print(f"  NON_PERSON(3):{stats.get(CLASS_NON_PERSON, 0):>6}  ({stats.get(CLASS_NON_PERSON,0)/total*100:5.1f}%)")
     print(f"  SITTING(4):   {stats.get(CLASS_SITTING, 0):>6}  ({stats.get(CLASS_SITTING,0)/total*100:5.1f}%)")
-    print(f"  ÊÓÆµIDÒÑ±£´æ: {os.path.join(PROCESSED_DIR, 'video_ids.npy')}")
-    print(f"  ÔªÊı¾İÒÑ±£´æ: {meta_path}")
+    print(f"  è§†é¢‘IDå·²ä¿å­˜: {os.path.join(PROCESSED_DIR, 'video_ids.npy')}")
+    print(f"  å…ƒæ•°æ®å·²ä¿å­˜: {meta_path}")
 
 
 if __name__ == "__main__":

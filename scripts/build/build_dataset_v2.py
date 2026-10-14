@@ -15,8 +15,8 @@ from features.feature_builder_v2 import FeatureBuilderV2, interpolate_missing_fr
 from features.normalize import normalize_keypoints
 
 PROJECT_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
-ARCHIVE = r"C:\Users\y'y'x\Downloads\archive"
-KEYPOINTS_DIR = os.path.join(PROJECT_ROOT, "yolo_keypoints")
+ARCHIVE = r"/Volumes/media-backup/AI-data/falldown/Le2i-v2"
+KEYPOINTS_DIR = os.path.join(PROJECT_ROOT, "dataset/yolo_keypoints")
 PROCESSED_DIR = os.path.join(PROJECT_ROOT, "processed")
 
 WINDOW_SIZE = 30
@@ -24,7 +24,8 @@ STRIDE = 3
 TARGET_FPS = 25
 INPUT_DIM = 192
 
-# V2 类定�?CLASS_SAFE = 0
+# V2 类定义
+CLASS_SAFE = 0
 CLASS_FALLEN = 1
 CLASS_SITTING = 2
 CLASS_NON_PERSON = 3
@@ -70,7 +71,7 @@ NORMAL_SCENES = {
 }
 
 def is_sitting_posture_v2(keypoints):
-    """基于关节角度的坐姿检测（尺度不变）�?""
+    """基于关节角度的坐姿检测（尺度不变）"""
     kp = np.asarray(keypoints, dtype=np.float32)
     if kp.shape != (17, 2):
         return False
@@ -171,22 +172,22 @@ def parse_annotation_perframe(anno_path):
 
 def get_window_class_and_risk(frame_labels, start, end, fall_start, fall_end,
                                raw_keypoints, subsample_indices):
-    """返回 (class_label, risk_label, time_label) 三元组�?""
+    """返回 (class_label, risk_label, time_label) 三元组"""
     last_orig_idx = subsample_indices[end - 1]
 
-    # 规则 1: fall_end 之后 �?FALLEN, risk=1.0, time=0
+    # 规则 1: fall_end 之后 �?FALLEN, risk=1.0, time=0
     if fall_start is not None and fall_end is not None:
         if last_orig_idx >= fall_end:
             return CLASS_FALLEN, RISK_FALL, 0.0
 
-    # 规则 2: 跌倒过程中，逐帧标注�?3/4/7/8 �?FALLEN, risk=1.0, time=0
+    # 规则 2: 跌倒过程中，逐帧标注�?3/4/7/8 �?FALLEN, risk=1.0, time=0
     if fall_start is not None and fall_end is not None:
         if fall_start <= last_orig_idx < fall_end:
             ol = frame_labels.get(last_orig_idx) if frame_labels else None
             if ol is not None and ol in (3, 4, 7, 8):
                 return CLASS_FALLEN, RISK_FALL, 0.0
 
-    # 规则 3: 窗口�?10 帧坐姿检�?�?0% �?SITTING, risk=0.0, time=999
+    # 规则 3: 窗口�?10 帧坐姿检�?�?0% �?SITTING, risk=0.0, time=999
     window_len = end - start
     check_start = max(0, window_len - 10)
     sitting_count = 0
@@ -199,7 +200,7 @@ def get_window_class_and_risk(frame_labels, start, end, fall_start, fall_end,
     if check_frames > 0 and sitting_count >= check_frames * 0.6:
         return CLASS_SITTING, RISK_SAFE, NORMAL_TIME
 
-    # 规则 4: 逐帧标注坐姿 �?0% �?SITTING, risk=0.0, time=999
+    # 规则 4: 逐帧标注坐姿 �?0% �?SITTING, risk=0.0, time=999
     if frame_labels:
         sitting_count = 0
         for t_s in range(start, end):
@@ -211,7 +212,8 @@ def get_window_class_and_risk(frame_labels, start, end, fall_start, fall_end,
         if sitting_count >= (end - start) * 0.5:
             return CLASS_SITTING, RISK_SAFE, NORMAL_TIME
 
-    # 规则 5: 指数风险 �?�?fall 标注的视�?    if fall_start is not None and fall_end is not None:
+    # 规则 5: 指数风险衰减 → 有 fall 标注的视频
+    if fall_start is not None and fall_end is not None:
         if last_orig_idx >= fall_end:
             return CLASS_FALLEN, RISK_FALL, 0.0
         elif last_orig_idx >= fall_start - PRE_FALL:
@@ -221,7 +223,8 @@ def get_window_class_and_risk(frame_labels, start, end, fall_start, fall_end,
         else:
             return CLASS_SAFE, RISK_SAFE, NORMAL_TIME
 
-    # �?fall 标注的正常视�?    return CLASS_SAFE, RISK_SAFE, NORMAL_TIME
+    # 无 fall 标注的正常视频
+    return CLASS_SAFE, RISK_SAFE, NORMAL_TIME
 
 
 def build_window_features(keypoints_seq, confs_seq=None):
@@ -252,7 +255,7 @@ def main():
     video_ids_list = []
     metadata = []
     stats_c = {CLASS_SAFE: 0, CLASS_FALLEN: 0, CLASS_SITTING: 0, CLASS_NON_PERSON: 0}
-    stats_r = {"risk=0.0": 0, "0<risk�?.3": 0, "0.3<risk�?.5": 0,
+    stats_r = {"risk=0.0": 0, "0<risk�?.3": 0, "0.3<risk�?.5": 0,
                "0.5<risk<1.0": 0, "risk=1.0": 0}
 
     SCENE_ID_MAP = {
@@ -264,14 +267,14 @@ def main():
         "Office": 5,
     }
 
-    # ======= 处理有标注的场景（fall 视频�?=======
+    # ======= 处理有标注的场景（fall 视频�?=======
     for scene_name, scene_info in SCENES.items():
         video_dir = scene_info["video_dir"]
         anno_dir = scene_info["anno_dir"]
         scene_id = SCENE_ID_MAP[scene_name]
 
         if not os.path.isdir(video_dir):
-            print(f"[跳过] 视频目录不存�? {video_dir}")
+            print(f"[跳过] 视频目录不存�? {video_dir}")
             continue
 
         video_files = sorted([f for f in os.listdir(video_dir) if f.endswith(".avi")])
@@ -283,7 +286,7 @@ def main():
             cf_path = os.path.join(KEYPOINTS_DIR, f"{scene_name}_video_{video_id}_confs.npy")
 
             if not os.path.exists(kp_path):
-                print(f"  跳过 video {video_id} (�?keypoints 缓存)")
+                print(f"  跳过 video {video_id} (keypoints 缓存)")
                 continue
 
             raw_keypoints = np.load(kp_path)
@@ -324,9 +327,9 @@ def main():
                 if risk == 0.0:
                     stats_r["risk=0.0"] = stats_r.get("risk=0.0", 0) + 1
                 elif risk <= 0.3:
-                    stats_r["0<risk�?.3"] = stats_r.get("0<risk�?.3", 0) + 1
+                    stats_r["0<risk�?.3"] = stats_r.get("0<risk�?.3", 0) + 1
                 elif risk <= 0.5:
-                    stats_r["0.3<risk�?.5"] = stats_r.get("0.3<risk�?.5", 0) + 1
+                    stats_r["0.3<risk�?.5"] = stats_r.get("0.3<risk�?.5", 0) + 1
                 elif risk < 1.0:
                     stats_r["0.5<risk<1.0"] = stats_r.get("0.5<risk<1.0", 0) + 1
                 else:
@@ -346,7 +349,7 @@ def main():
         scene_id = SCENE_ID_MAP[scene_name]
 
         if not os.path.isdir(video_dir):
-            print(f"[跳过] 目录不存�? {video_dir}")
+            print(f"[跳过] 目录不存�? {video_dir}")
             continue
 
         video_files = sorted([f for f in os.listdir(video_dir) if f.endswith(".avi")])
@@ -361,7 +364,7 @@ def main():
             cf_path = os.path.join(KEYPOINTS_DIR, f"{scene_name}_video_{video_id}_confs.npy")
 
             if not os.path.exists(kp_path):
-                print(f"  跳过 video {video_id} (�?keypoints 缓存)")
+                print(f"  跳过 video {video_id} (keypoints 缓存)")
                 continue
 
             raw_keypoints = np.load(kp_path)
@@ -454,15 +457,15 @@ def main():
             if r == 0.0:
                 stats_r["risk=0.0"] = stats_r.get("risk=0.0", 0) + 1
             elif r <= 0.3:
-                stats_r["0<risk�?.3"] = stats_r.get("0<risk�?.3", 0) + 1
+                stats_r["0<risk�?.3"] = stats_r.get("0<risk�?.3", 0) + 1
             elif r <= 0.5:
-                stats_r["0.3<risk�?.5"] = stats_r.get("0.3<risk�?.5", 0) + 1
+                stats_r["0.3<risk�?.5"] = stats_r.get("0.3<risk�?.5", 0) + 1
             elif r < 1.0:
                 stats_r["0.5<risk<1.0"] = stats_r.get("0.5<risk<1.0", 0) + 1
             else:
                 stats_r["risk=1.0"] = stats_r.get("risk=1.0", 0) + 1
     else:
-        print(f"\n[警告] Pre-VFall 数据不存�? {pv_x_path}")
+        print(f"\n[警告] Pre-VFall 数据不存�? {pv_x_path}")
         print("  跳过合并，仅使用 Le2i 数据")
 
     # ======= 保存 =======
@@ -480,7 +483,7 @@ def main():
 
     total = len(xs)
     print(f"\n{'='*60}")
-    print("V2 数据集构建完�?)
+    print("V2 数据集构建完成!")
     print(f"{'='*60}")
     print(f"  总样本数: {total}")
     print(f"  特征形状: {xs.shape}")
@@ -489,7 +492,7 @@ def main():
     print(f"  SITTING(2):   {stats_c.get(CLASS_SITTING, 0):>6}  ({stats_c.get(CLASS_SITTING,0)/total*100:5.1f}%)")
     print(f"  NON_PERSON(3):{stats_c.get(CLASS_NON_PERSON, 0):>6}  ({stats_c.get(CLASS_NON_PERSON,0)/total*100:5.1f}%)")
     print()
-    for key in ["risk=0.0", "0<risk�?.3", "0.3<risk�?.5", "0.5<risk<1.0", "risk=1.0"]:
+    for key in ["risk=0.0", "0<risk�?.3", "0.3<risk�?.5", "0.5<risk<1.0", "risk=1.0"]:
         print(f"  {key}: {stats_r.get(key, 0):>6}")
 
 

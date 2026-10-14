@@ -191,7 +191,7 @@ class PoseExtractor:
     人体姿态提取器
     """
 
-    def __init__(self, model_path=modelPath, conf=0.02):
+    def __init__(self, model_path=modelPath, conf=0.02, vehicle_check=None):
 
         # 加载YOLO Pose模型
         self.model = YOLO(model_path)
@@ -202,6 +202,12 @@ class PoseExtractor:
         # 的关键点门拦下(实测其关键点均值仅 0.03)。难例集 105 正样本中 28 帧的
         # 最高分落在 [0.02,0.05), conf=0.05 时全部漏检。详见 docs/tuning-log.md
         self.conf = conf
+
+        # 可选: 车类交叉验证 (pose/vehicle_cross_check.py)。
+        # 默认 None = 不启用, 保证现有调用方(含 extract_keypoints.py 重建训练
+        # 关键点缓存)的行为与改动前完全一致 —— 启用它会改变训练特征,
+        # 必须显式传入并重新训练才能对比。
+        self.vehicle_check = vehicle_check
 
     def extract(self, frame):
         """
@@ -266,6 +272,11 @@ class PoseExtractor:
 
         # [阶段0-fix3] 合并重叠检测 (跌倒后检测分裂修复)
         persons = _merge_overlapping_detections(persons, iou_threshold=0.3)
+
+        # 可选: 剔除"被当成人的车辆"(见 vehicle_cross_check.py)。放在最后,
+        # 过滤的对象即最终返回结果。
+        if self.vehicle_check is not None:
+            persons = self.vehicle_check.filter(persons, frame)
 
         return persons
 

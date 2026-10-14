@@ -1,10 +1,11 @@
-import os, sys, json, numpy as np
+import os, sys, json, argparse, numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 from features.feature_builder_v2 import FeatureBuilderV2, interpolate_missing_frames
 from features.normalize import normalize_keypoints
 
-PREVFALL_DIR = r"D:\Download\Pre-VFall\Pre-VFall"
+# Pre-VFall 数据根目录（场景目录直接位于其下），可用 --data-dir 覆盖
+PREVFALL_DIR = r"/Volumes/media-backup/AI-data/falldown/Pre-VFall"
 PROCESSED_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "processed")
 os.makedirs(PROCESSED_DIR, exist_ok=True)
 
@@ -105,16 +106,62 @@ def build_segment_features(kpts, confs):
     acc[1:] = vel[1:] - vel[:-1]
     return np.concatenate([pos, vel, acc], axis=1).astype(np.float32)
 
+SEGMENT_TYPES = [
+    ("Normal",   CLASS_SAFE,   RISK_NORMAL,   999.0),
+    ("Abnormal", CLASS_SAFE,   RISK_ABNORMAL,  999.0),
+    ("Fall",     CLASS_FALLEN, RISK_FALL,       0.0),
+]
+
+
+def find_segment_dir(subj_path, subject, segment_name):
+    """定位段落目录，兼容两种命名分隔符。
+
+    多数场景为 `<subject>-<Segment>-json`（连字符），但 confusion_delirium
+    整个场景用的是 `<subject>_<Segment>-json`（下划线），需同时支持。
+
+    数据本身存在一处错位：confusion_delirium/CLFM2/ 下混有 CLFM1_Abnormal-json。
+    这里只接受前缀与受试者名一致的目录，遇到前缀不符的打印警告并跳过，
+    避免把它错记成 CLFM2 的样本（同时 CLFM1 自己仍有该段落目录）。
+    """
+    dirs = os.listdir(subj_path) if os.path.isdir(subj_path) else []
+    for sep in ("-", "_"):
+        expected = f"{subject}{sep}{segment_name}-json"
+        if expected in dirs:
+            return os.path.join(subj_path, expected)
+    # 回退：容错模糊匹配（应对个别命名差异），但拒绝前缀不符者
+    for d in sorted(dirs):
+        if not (d.endswith(f"{segment_name}-json") and os.path.isdir(os.path.join(subj_path, d))):
+            continue
+        prefix = d[:-(len(segment_name) + 6)].rstrip("-_")
+        if prefix != subject:
+            print(f"  [警告] 前缀与受试者不符，跳过: {subj_path}/{d}")
+            continue
+        return os.path.join(subj_path, d)
+    return None
+
+
 def main():
+    parser = argparse.ArgumentParser(description="Pre-VFall (OpenPose JSON) -> V2 训练数据转换")
+    parser.add_argument("--data-dir", default=PREVFALL_DIR,
+                        help="Pre-VFall 数据根目录，默认 " + PREVFALL_DIR)
+    args = parser.parse_args()
+    data_dir = args.data_dir
+
+    if not os.path.isdir(data_dir):
+        print(f"[错误] Pre-VFall 数据目录不存在: {data_dir}")
+        print("       请用 --data-dir 指定（应包含 confusion_delirium 等场景目录）")
+        sys.exit(1)
+
     all_x = []
     all_classes = []
     all_risks = []
     all_times = []
     all_ids = []
     subject_counter = 0
+    skipped = []
 
     for scene_name in SCENES:
-        scene_path = os.path.join(PREVFALL_DIR, scene_name)
+        scene_path = os.path.join(data_dir, scene_name)
         if not os.path.isdir(scene_path):
             print(f"[跳过] {scene_path} 不存在")
             continue
@@ -127,17 +174,15 @@ def main():
             subject_counter += 1
             subj_path = os.path.join(scene_path, subject)
 
-            for segment_name, class_label, risk_label, time_label in [
-                ("Normal",   CLASS_SAFE,   RISK_NORMAL,   999.0),
-                ("Abnormal", CLASS_SAFE,   RISK_ABNORMAL,  999.0),
-                ("Fall",     CLASS_FALLEN, RISK_FALL,       0.0),
-            ]:
-                seg_dir = os.path.join(subj_path, f"{subject}-{segment_name}-json")
-                if not os.path.isdir(seg_dir):
+            for segment_name, class_label, risk_label, time_label in SEGMENT_TYPES:
+                seg_dir = find_segment_dir(subj_path, subject, segment_name)
+                if seg_dir is None:
+                    skipped.append((scene_name, subject, segment_name))
                     continue
 
                 kpts, confs = load_segment_jsons(seg_dir)
                 if len(kpts) < WINDOW_SIZE:
+                    skipped.append((scene_name, subject, segment_name, f"仅 {len(kpts)} 帧"))
                     continue
 
                 features = build_segment_features(kpts, confs)
@@ -171,9 +216,15 @@ def main():
     print(f"Prevfall samples: {len(xs)}")
     print(f"  SAFE(0): {int((classes==0).sum())}")
     print(f"  FALLEN(1): {int((classes==1).sum())}")
-    print(f"  risk=0.0: {int((risks==0.0).sum())}")
-    print(f"  risk=0.4: {int((risks==0.4).sum())}")
-    print(f"  risk=1.0: {int((risks==1.0).sum())}")
+    print(f"  risk=0.0 (Normal):   {int((risks==0.0).sum())}   (RISK_NORMAL={RISK_NORMAL})")
+    print(f"  risk=0.5 (Abnormal): {int((risks==RISK_ABNORMAL).sum())}   (RISK_ABNORMAL={RISK_ABNORMAL})")
+    print(f"  risk=1.0 (Fall):     {int((risks==1.0).sum())}   (RISK_FALL={RISK_FALL})")
+    if skipped:
+        print(f"\n跳过 {len(skipped)} 个段落:")
+        for item in skipped[:20]:
+            print("  " + " / ".join(str(x) for x in item))
+        if len(skipped) > 20:
+            print(f"  ... 其余 {len(skipped) - 20} 项省略")
 
 if __name__ == "__main__":
     main()

@@ -27,7 +27,7 @@ pose_extractor.py
     修复: 新增 _is_valid_person() 关键点质量门, 过滤"关键点稀疏+塌缩"的假人:
           - 有效关键点(conf>0.3)数量 >= min_valid_kpts(4)
           - 有效关键点空间跨度 >= min_spread(8px) 至少一个维度
-          - 平均关键点置信度 >= min_mean_conf(0.3)
+          - 平均关键点置信度两段式判定 (2026-10 调整, 见 _is_valid_person docstring)
           真人 n_valid>=12 / spread>=20px / mean>=0.5; 物品 n_valid<=2 / spread<=2px / mean<=0.12,
           阈值取中间安全区, 保留跌倒后低置信度真人(仍有>=4个可信关键点).
 """
@@ -110,17 +110,35 @@ def _merge_overlapping_detections(persons, iou_threshold=0.3, containment_thresh
 def _is_valid_person(kpts, kpts_conf, bbox, score=1.0,
                      min_kp_conf=0.3, min_valid_kpts=4,
                      min_spread=8.0, min_mean_conf=0.3,
-                     low_score_thres=0.15, low_score_min_spread=35.0):
+                     low_score_thres=0.15, low_score_min_spread=35.0,
+                     weak_kpts_floor=0.2, weak_box_score=0.3):
     """[阶段0-fix5] 关键点质量门: 判定检测是否为真人.
 
     真人: 有效关键点>=12, 跨度>=40px, 平均置信度>=0.5, bbox score>=0.3
     物品: 有效关键点<=2, 跨度<=2px, 平均置信度<=0.12, bbox score<=0.1
           OR (低score + 小跨度) 墙画/电视等有8个中等关键点但 score<0.15 跨度<35px
-    阈值取安全中间区, 兼容跌倒后低置信度真人(仍有>=4个可信关键点+合理跨度).
+
+    平均关键点置信度采用**两段式**判定（2026-10 调整，原为单一 0.30 下限）：
+
+        mean_conf < weak_kpts_floor(0.20)                      -> 丢弃（硬下限）
+        mean_conf < min_mean_conf(0.30) 且 score < weak_box_score(0.30) -> 丢弃
+        否则                                                     -> 保留
+
+    原因：单一 0.30 下限会把整类夜间真人滤掉——夜间人物多为逆光剪影或深色衣物，
+    bbox 置信度正常而关键点置信度普遍偏低（实测 0.22–0.28）。但单纯把下限降到
+    0.20 又会放进家具：Home_01 video(10) 的空镜头里，红色沙发框 score 0.07–0.26、
+    关键点均值 0.21–0.26，而同一帧里楼梯上的真人 score 0.21–0.77、关键点均值 0.78。
+    两者在"关键点低"上重叠，但沙发**框置信度也低**，真人则框置信度高。
+    因此只有"弱框 + 弱关键点"才判为假人。
+
+    实测（114 帧难例集 + Le2i 回归）见 docs/tuning-log.md。
 
     Parameters
     ----------
     score : float            bbox 检测置信度 (低score+小跨度 → 物品误检)
+    min_mean_conf : float    关键点平均置信度下限（框置信度达标时）
+    weak_kpts_floor : float  关键点平均置信度的硬下限
+    weak_box_score : float   框置信度低于此值时，要求关键点达到 min_mean_conf
     low_score_thres : float  低于此 score 时, 要求 spread >= low_score_min_spread
     low_score_min_spread : float  低 score 检测的最小关键点跨度
 
@@ -152,8 +170,11 @@ def _is_valid_person(kpts, kpts_conf, bbox, score=1.0,
     if spread < min_spread:
         return False
 
-    # 3. 平均关键点置信度
-    if float(kc.mean()) < min_mean_conf:
+    # 3. 平均关键点置信度: 两段式判定 (见 docstring)
+    mean_conf = float(kc.mean())
+    if mean_conf < weak_kpts_floor:
+        return False
+    if mean_conf < min_mean_conf and score < weak_box_score:
         return False
 
     # 4. [阶段0-fix5b] 低 bbox score + 小跨度 → 物品误检 (墙画/电视/海报等)
@@ -223,15 +244,12 @@ class PoseExtractor:
                 keypoints)):
 
             # [阶段0-fix5] 关键点质量门: 过滤物品误检 (咖啡机/椅子/植物/墙画等)
+            # 平均关键点置信度门也在这里面 (min_mean_conf)，不要再另写一份 ——
+            # 曾有一份硬编码 0.3 的重复过滤散在下方，与 _is_valid_person 的阈值
+            # 各改各的，容易只改一处。
             kc = kpts_conf[i] if kpts_conf is not None else None
             if not _is_valid_person(kpts, kc, bbox, score=float(score)):
                 continue
-
-            # === [REFORM] 置信度过滤：平均关键点置信度 < 0.3 → 丢弃 ===
-            if kc is not None:
-                avg_conf = float(np.mean(kc))
-                if avg_conf < 0.3:
-                    continue
 
             person = {
                 "bbox": bbox,

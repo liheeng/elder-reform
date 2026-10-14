@@ -48,18 +48,33 @@ def load_labels(hard_dir):
     return rows
 
 
-def gate(boxes, scores, kpts_xy, kpts_conf, score_thr, min_mean_conf):
-    """复刻 PoseExtractor.extract 的过滤链，变量只有两个阈值。"""
+def gate(boxes, scores, kpts_xy, kpts_conf, score_thr, min_mean_conf,
+         weak_floor=None, weak_box_score=None):
+    """复刻 PoseExtractor.extract 的过滤链。
+
+    传入 weak_floor / weak_box_score 时按生产的两段式判定；
+    weak_floor=None 时退化为"单一 min_mean_conf 下限"（用 weak_box_score>1 模拟），
+    以便对比历史规则。
+
+    注意别再另写一份"平均关键点置信度"过滤 —— 那正是 2026-10 修掉的重复实现
+    （extract() 里曾有一份硬编码 0.3，与 _is_valid_person 各改各的）。
+    """
+    if weak_floor is None:
+        weak_floor = min_mean_conf
+        weak_box_score = 2.0        # > 1 即"任何 score 都要求达标" == 单一阈值
+
     keep = []
     for b, s, kp, kc in zip(boxes, scores, kpts_xy, kpts_conf):
         if float(s) < score_thr:
             continue
-        if not _is_valid_person(kp, kc, b, score=float(s), min_mean_conf=min_mean_conf):
-            continue
-        if kc is not None and float(np.mean(kc)) < min_mean_conf:
+        if not _is_valid_person(kp, kc, b, score=float(s),
+                                min_mean_conf=min_mean_conf,
+                                weak_kpts_floor=weak_floor,
+                                weak_box_score=weak_box_score):
             continue
         keep.append({"bbox": b, "keypoints": kp, "score": float(s), "kpts_conf": kc})
     return _merge_overlapping_detections(keep, iou_threshold=0.3)
+
 
 
 def main():
@@ -96,17 +111,24 @@ def main():
             cache[(v, f)] = (b.xyxy.cpu().numpy(), b.conf.cpu().numpy(),
                              r.keypoints.xy.cpu().numpy(), r.keypoints.conf.cpu().numpy())
 
+    # 三种规则：历史单一阈值 / 朴素下调 / 生产复合门
+    RULES = [
+        ("单一 0.30 (2026-10 前)", dict(min_mean_conf=0.30)),
+        ("单一 0.20 (朴素下调)", dict(min_mean_conf=0.20)),
+        ("复合门 (当前生产)", dict(min_mean_conf=0.30, weak_floor=0.20, weak_box_score=0.30)),
+    ]
     print("阈值扫描：难例集 %d 帧（正 %d / 负 %d），推理用 conf=%.3f"
           % (len(labels), n_pos, n_neg, args.infer_conf))
-    print("%-8s %-8s %-22s %s" % ("conf", "kp门", "正样本召回", "负样本误报"))
-    for score_thr in args.conf_list:
-        for kp in args.kp_list:
+    print()
+    print("%-24s %-8s %-22s %s" % ("规则", "conf", "正样本召回", "负样本误报"))
+    for name, kw in RULES:
+        for score_thr in args.conf_list:
             hit = fp = 0
             fp_frames = []
             for v, f, present in labels:
                 bx, sc, xy, kc = cache.get((v, f), (np.zeros((0, 4)), np.zeros(0),
                                                     np.zeros((0, 2)), np.zeros((0, 17))))
-                kept = gate(bx, sc, xy, kc, score_thr, kp) if len(bx) else []
+                kept = gate(bx, sc, xy, kc, score_thr, **kw) if len(bx) else []
                 det = len(kept) > 0
                 if present == 1:
                     hit += int(det)
@@ -114,12 +136,13 @@ def main():
                     fp += int(det)
                     if det:
                         fp_frames.append("%s#%d" % (v, f))
-            tag = "  <- 生产值" if (abs(kp - 0.30) < 1e-9 and abs(score_thr - 0.05) < 1e-9) else ""
-            print("%-8.2f %-8.2f %-22s %s%s"
-                  % (score_thr, kp, "%d/%d (%.1f%%)" % (hit, n_pos, 100.0 * hit / n_pos),
+            tag = "  <- 生产值" if ("复合门" in name and abs(score_thr - 0.05) < 1e-9) else ""
+            print("%-24s %-8.2f %-22s %s%s"
+                  % (name, score_thr, "%d/%d (%.1f%%)" % (hit, n_pos, 100.0 * hit / n_pos),
                      "%d/%d" % (fp, n_neg), tag))
             if args.list_fp and fp_frames:
                 print("         误报帧: %s" % ", ".join(fp_frames))
+        print()
 
 
 if __name__ == "__main__":

@@ -1,0 +1,40 @@
+# ============================================================
+# 老年人跌倒检测系统 —— 依赖清单
+# ============================================================
+# 安装:
+#     python -m pip install -r requirements.txt
+#
+# 已验证可用的版本组合（Python 3.10, macOS）:
+#     numpy 1.24.4 | torch 2.12.0 | scikit-learn 1.7.2 | scipy 1.10.1
+#
+# 说明:
+#   - 训练与推理共用同一套依赖，无需区分 requirements-dev
+#   - torch 默认安装 CPU 版；需要 GPU 请先按 https://pytorch.org
+#     选择合适的 CUDA 轮子单独安装，再安装本文件其余部分
+#   - ultralytics 会连带引入 torch / torchvision / opencv 等传递依赖
+#   - 本仓库不含第三方数据集与训练权重，重建数据集需自备 Le2i 等原始视频
+# ============================================================
+
+# ---- 数值计算 ----
+numpy>=1.23
+
+# ---- 图像与视频 IO ----
+#   realtime_detect.py / scripts/eval/*.py 使用 cv2
+opencv-python>=4.7
+
+# ---- 深度学习框架 ----
+#   classifier/ 下的模型定义与 scripts/train/ 下的训练脚本
+torch>=2.0
+
+# ---- 姿态估计 ----
+#   pose/pose_extractor.py 的 YOLO11n-Pose
+ultralytics>=8.1
+
+# ---- 训练期的评估与标定 ----
+#   scripts/train/train_v2.py: classification_report / confusion_matrix / minimize_scalar
+scikit-learn>=1.2
+scipy>=1.10
+
+# ---- 步态周期可视化 ----
+#   features/gait_cycle_detector.py 内惰性导入，不跑可视化时可不装
+matplotlib>=3.7

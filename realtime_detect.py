@@ -17,7 +17,7 @@ from pipeline.risk_engine_v2 import RiskEngineV2
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 MODEL_DIR = os.path.join(PROJECT_ROOT, "models")
-POSE_MODEL = os.path.join(MODEL_DIR, "yolo11n-pose.pt")
+POSE_MODEL = os.path.join(MODEL_DIR, "yolo26n-pose.pt")
 LSTM_MODEL = os.path.join(MODEL_DIR, "lstm_v2.pt")
 NORM_PARAMS = os.path.join(MODEL_DIR, "norm_v2.npz")
 TEMP_PARAMS = os.path.join(MODEL_DIR, "temperature_v2.npz")

@@ -27,7 +27,7 @@ opencv-python>=4.7
 torch>=2.0
 
 # ---- 姿态估计 ----
-#   pose/pose_extractor.py 的 YOLO11n-Pose
+#   pose/pose_extractor.py 的 YOLO26n-Pose
 ultralytics>=8.1
 
 # ---- 训练期的评估与标定 ----

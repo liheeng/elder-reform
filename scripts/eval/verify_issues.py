@@ -14,7 +14,7 @@ from pipeline.risk_engine import RiskEngine
 from utils.device import resolve_device
 
 PROJECT_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
-YOLO_MODEL = os.path.join(PROJECT_ROOT, "models", "yolo11n-pose.pt")
+YOLO_MODEL = os.path.join(PROJECT_ROOT, "models", "yolo26n-pose.pt")
 LSTM_MODEL = os.path.join(PROJECT_ROOT, "models", "lstm_4class.pt")
 NORM_PARAMS = os.path.join(PROJECT_ROOT, "models", "norm_4class.npz")
 if not os.path.exists(LSTM_MODEL):

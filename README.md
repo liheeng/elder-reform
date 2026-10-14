@@ -1,11 +1,11 @@
 # 老年人跌倒检测系统 V4
 
-> 基于姿态估计（YOLO11n-Pose）+ 时序深度学习（LSTM 多任务模型）的实时跌倒检测系统。  
+> 基于姿态估计（YOLO26n-Pose）+ 时序深度学习（LSTM 多任务模型）的实时跌倒检测系统。  
 > Real-time elderly fall detection using pose estimation + temporal deep learning.
 
 [![Python](https://img.shields.io/badge/python-3.9-blue)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0-ee4c2c)](https://pytorch.org/)
-[![Ultralytics](https://img.shields.io/badge/YOLO-11n--Pose-00BBFF)](https://www.ultralytics.com/)
+[![Ultralytics](https://img.shields.io/badge/YOLO-26n--Pose-00BBFF)](https://www.ultralytics.com/)
 
 ---
 
@@ -52,7 +52,7 @@
   │
   ▼
 ┌─────────────────────────────────────┐
-│ PoseExtractor                       │  YOLO11n-Pose → 17 个 COCO 关键点
+│ PoseExtractor                       │  YOLO26n-Pose → 17 个 COCO 关键点
 │ pose/pose_extractor.py              │  质量门控 + 重叠检测合并
 └──────────────┬──────────────────────┘
                │
@@ -140,7 +140,7 @@ elder-master-reformv4/
 │   └── gait_cycle_detector.py   #   步态周期检测
 │
 ├── pose/                        # 姿态估计
-│   └── pose_extractor.py        #   YOLO11n-Pose 封装 + 质量门控
+│   └── pose_extractor.py        #   YOLO26n-Pose 封装 + 质量门控
 │
 ├── tracker/                     # 多目标跟踪
 │   ├── track.py                 #   跟踪目标数据结构
@@ -154,7 +154,7 @@ elder-master-reformv4/
 │   └── risk_engine_v2.py        #   V2 版本（双头融合）
 │
 ├── models/                      # 已训练权重（23 个文件）
-│   ├── yolo11n-pose.pt          #   YOLO 姿态模型
+│   ├── yolo26n-pose.pt          #   YOLO 姿态模型
 │   ├── lstm_v2.pt               #   V2 多任务模型（最终版）
 │   ├── lstm_v2_fold{1-3}.pt     #   V2 交叉验证折叠模型
 │   ├── lstm_5class.pt           #   5 类模型（最终版）
@@ -189,7 +189,7 @@ elder-master-reformv4/
 
 ### 1. 姿态估计（`pose/pose_extractor.py`）
 
-**模型**：YOLO11n-Pose（Ultralytics）  
+**模型**：YOLO26n-Pose（Ultralytics）  
 **关键点**：17 个 COCO 关键点（鼻子、眼睛、肩膀、肘部、手腕、髋部、膝盖、脚踝）
 
 **质量过滤**：
@@ -280,7 +280,7 @@ pip install ultralytics opencv-python numpy scikit-learn scipy
 |---------|---------------|---------|
 | Python | 3.9 | 运行环境 |
 | PyTorch | 2.0+ | 深度学习框架（LSTM、混合精度训练） |
-| Ultralytics | 8.0+ | YOLO11n-Pose 姿态估计 |
+| Ultralytics | 8.0+ | YOLO26n-Pose 姿态估计 |
 | OpenCV | 4.5+ | 视频输入输出、可视化 |
 | NumPy | 1.21+ | 数值计算 |
 | scikit-learn | 1.0+ | 评估指标、分类报告 |
@@ -488,7 +488,7 @@ python scan_sit_videos.py
 | `lstm_5class.pt` | 分类 | 192 | 类别(5) | 5 类模型（SAFE/WARNING/FALLEN/NON_PERSON/SITTING） |
 | `lstm_4class.pt` | 分类 | 102 | 类别(4) | REFORM 遗留模型（SAFE/WARNING/FALLEN/NON_PERSON） |
 | `lstm_multitask.pt` | 回归 | 102 | 风险+时间 | 原始基线模型 |
-| `yolo11n-pose.pt` | 姿态（YOLO） | — | (17,2) 关键点 | Ultralytics nano 姿态模型 |
+| `yolo26n-pose.pt` | 姿态（YOLO） | — | (17,2) 关键点 | Ultralytics nano 姿态模型 |
 
 ---
 
@@ -534,7 +534,7 @@ python scan_sit_videos.py
 
 | 组件 | 延迟 |
 |-----------|---------|
-| YOLO11n-Pose（GPU） | ~10-15ms |
+| YOLO26n-Pose（GPU） | ~10-15ms |
 | 特征提取 | <1ms |
 | LSTM 推理（GPU） | ~2-5ms |
 | **每帧总计** | **~15-25ms**（GPU 下 >40 FPS） |
@@ -583,7 +583,7 @@ python scan_sit_videos.py
 
 ### 代码
 
-- **YOLO11**：Ultralytics YOLO11 - [https://github.com/ultralytics/ultralytics](https://github.com/ultralytics/ultralytics)
+- **YOLO26**：Ultralytics YOLO26 - [https://github.com/ultralytics/ultralytics](https://github.com/ultralytics/ultralytics)
 - **PyTorch LSTM**：[https://pytorch.org/docs/stable/generated/torch.nn.LSTM.html](https://pytorch.org/docs/stable/generated/torch.nn.LSTM.html)
 
 ---

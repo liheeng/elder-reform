@@ -23,7 +23,7 @@
 **姿态估计 + 时序深度学习**的老年人跌倒检测流水线。
 
 ```
-摄像头帧 → YOLO11n-Pose 关键点 → 64 维生物力学特征 → 30 帧滑窗
+摄像头帧 → YOLO26n-Pose 关键点 → 64 维生物力学特征 → 30 帧滑窗
          → 192 维时序张量 → 2 层 LSTM 多任务模型 → 风险状态机 → SAFE/WARNING/DANGER
 ```
 
@@ -66,7 +66,7 @@ flowchart TD
 
     subgraph ONLINE["在线推理流水线 realtime_detect.py"]
         CAM["视频源<br/>摄像头 / 视频文件"]
-        PE["PoseExtractor<br/>YOLO11n-Pose + 质量门控<br/>+ 重叠检测合并"]
+        PE["PoseExtractor<br/>YOLO26n-Pose + 质量门控<br/>+ 重叠检测合并"]
         TRK["PersonTracker<br/>质心跟踪分配 ID"]
         NRM["normalize_keypoints<br/>髋中心平移 + 身高缩放"]
         FB["FeatureBuilderV2<br/>64 维生物力学特征"]
@@ -295,7 +295,7 @@ acc[0] = 0,  acc[t] = vel[t] - vel[t-1]  =  pos[t] - 2·pos[t-1] + pos[t-2]
 | 路径 | 职责 | 关键点 |
 |---|---|---|
 | `realtime_detect.py` | 推理主循环 | 192 维拼接、无人帧填充、单目标 |
-| `pose/pose_extractor.py` | YOLO11n-Pose 封装 | `conf=0.05`、三重质量门、重叠合并 |
+| `pose/pose_extractor.py` | YOLO26n-Pose 封装 | `conf=0.05`、三重质量门、重叠合并 |
 | `tracker/person_tracker.py` | 质心跟踪 | **未被调用** |
 | `features/normalize.py` | 关键点归一化 | 髋中心平移 + 身高缩放到 100px |
 | `features/feature_builder_v2.py` | 64 维特征 | 51 + 6 + 7 |
@@ -396,7 +396,7 @@ pooled = 0.5 * out[:, -1, :] + 0.5 * out.mean(dim=1)
 
 | 缺失项 | 影响 |
 |---|---|
-| `models/` 整个目录 | 无 `yolo11n-pose.pt`、`lstm_v2.pt`、`norm_v2.npz`、`temperature_v2.npz` |
+| `models/` 整个目录 | 无 `yolo26n-pose.pt`、`lstm_v2.pt`、`norm_v2.npz`、`temperature_v2.npz` |
 | `yolo_keypoints/` 目录 | 无预提取关键点缓存，需用 `scripts/build/extract_keypoints.py` 重新抽点 |
 | `processed/*.npy` | 仅有 3 个 json meta，无 `x_v2.npy` 等训练数据 |
 | Le2i 原始视频与标注 | 不含于仓库，需从 [Kaggle: falldataset-imvia](https://www.kaggle.com/datasets/tuyenldvn/falldataset-imvia) 获取（190 个 `.avi` + 130 份标注，约 16 GB），并按 `build_dataset_v2.py` 的 `ARCHIVE` 结构摆放 |
@@ -494,7 +494,7 @@ PREVFALL_DIR = r"/Volumes/media-backup/AI-data/falldown/Pre-VFall"   # 可用 --
 目标：让画面出现 bbox 和状态文字。
 
 1. 补依赖：`ultralytics`、`torch`、`opencv-python`、`numpy`、`scikit-learn`、`scipy`
-2. 获取 `models/yolo11n-pose.pt`（Ultralytics 官方可下载）
+2. 获取 `models/yolo26n-pose.pt`（Ultralytics 官方可下载）
 3. 跑 `python realtime_detect.py <video>`
 
 **验收**：画面出现 `ID:0 SAFE risk:0.0xx` 叠加层

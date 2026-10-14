@@ -39,7 +39,8 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).parent.parent
 MODELS_DIR = PROJECT_ROOT / "models"
-modelPath = str(MODELS_DIR / "yolo11n-pose.pt")
+# modelPath = str(MODELS_DIR / "yolo11n-pose.pt")
+modelPath = str(MODELS_DIR / "yolo26n-pose.pt")
 
 os.environ['YOLO_CONFIG_DIR'] = str(PROJECT_ROOT / "models")
 

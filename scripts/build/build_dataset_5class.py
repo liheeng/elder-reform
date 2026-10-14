@@ -15,8 +15,8 @@ from features.feature_builder_v2 import FeatureBuilderV2, interpolate_missing_fr
 from features.normalize import normalize_keypoints
 
 PROJECT_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
-ARCHIVE = r"/Volumes/media-backup/AI-data/falldown/Le2i-v2"
-KEYPOINTS_DIR = os.path.join(PROJECT_ROOT, "dataset/yolo_keypoints")
+ARCHIVE = r"/Volumes/media-backup/AI-data/dataset/falldown/Le2i-v2"
+KEYPOINTS_DIR = os.path.join(PROJECT_ROOT, "yolo_keypoints")
 PROCESSED_DIR = os.path.join(PROJECT_ROOT, "processed")
 
 WINDOW_SIZE = 30

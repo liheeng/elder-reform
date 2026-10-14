@@ -5,7 +5,7 @@ from features.feature_builder_v2 import FeatureBuilderV2, interpolate_missing_fr
 from features.normalize import normalize_keypoints
 
 # Pre-VFall 数据根目录（场景目录直接位于其下），可用 --data-dir 覆盖
-PREVFALL_DIR = r"/Volumes/media-backup/AI-data/falldown/Pre-VFall"
+PREVFALL_DIR = r"/Volumes/media-backup/AI-data/dataset/falldown/Pre-VFall"
 PROCESSED_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "processed")
 os.makedirs(PROCESSED_DIR, exist_ok=True)
 

@@ -419,7 +419,7 @@ Windows 绝对路径，在 macOS/Linux 上需修改后方可重建数据集。
 `scripts/build/build_prevfall_dataset.py` 中（Pre-VFall 数据根目录，默认值同样硬编码 Windows 路径，但**已支持 `--data-dir` 覆盖**）：
 
 ```python
-PREVFALL_DIR = r"/Volumes/media-backup/AI-data/falldown/Pre-VFall"   # 可用 --data-dir 覆盖
+PREVFALL_DIR = r"/Volumes/media-backup/AI-data/dataset/falldown/Pre-VFall"   # 可用 --data-dir 覆盖
 ```
 
 此外 `extract_keypoints.py` 的 `ARCHIVE` 与 `KEYPOINTS_DIR` 也已硬编码为绝对路径。

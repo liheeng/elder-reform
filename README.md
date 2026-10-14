@@ -305,7 +305,7 @@ pip install ultralytics opencv-python numpy scikit-learn scipy
 **Le2i 目录结构**（`build_dataset_v2.py` 的 `ARCHIVE` 需指向这一层）：
 
 ```
-<ARCHIVE>/                          # 例: /Volumes/media-backup/AI-data/falldown/Le2i-v2
+<ARCHIVE>/                          # 例: /Volumes/media-backup/AI-data/dataset/falldown/Le2i-v2
 ├── Coffee_room_01/Coffee_room_01/{Videos,Annotation_files}/
 ├── Coffee_room_02/Coffee_room_02/{Videos,Annotations_files}/   # 注意是 Annotations_files
 ├── Home_01/Home_01/{Videos,Annotation_files}/

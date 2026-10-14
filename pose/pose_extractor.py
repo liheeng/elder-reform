@@ -37,6 +37,8 @@ import numpy as np
 import os
 from pathlib import Path
 
+from utils.device import get_device
+DEVICE = get_device()
 PROJECT_ROOT = Path(__file__).parent.parent
 MODELS_DIR = PROJECT_ROOT / "models"
 # modelPath = str(MODELS_DIR / "yolo11n-pose.pt")
@@ -193,7 +195,7 @@ class PoseExtractor:
         persons = []
 
         # 推理 [阶段0-fix2] 使用降低后的 conf 阈值, [阶段0-fix3] 提高 iou 阈值抑制分裂检测
-        results = self.model(frame, verbose=False, conf=self.conf, iou=0.5)
+        results = self.model(frame, verbose=False, conf=self.conf, iou=0.5, device=DEVICE)
 
         result = results[0]
 

@@ -34,8 +34,8 @@ import numpy as np  # noqa: E402
 
 from pose.pose_extractor import PoseExtractor  # noqa: E402
 
-ARCHIVE = r"/Volumes/media-backup/AI-data/falldown/Le2i-v2"
-KEYPOINTS_DIR = PROJECT_ROOT / "dataset" / "yolo_keypoints"
+ARCHIVE = r"/Volumes/media-backup/AI-data/dataset/falldown/Le2i-v2"
+KEYPOINTS_DIR = PROJECT_ROOT / "yolo_keypoints"
 
 # 仓库 models/ 缺权重时的回退位置（与 pose_extractor.py 使用的同一份 yolo26n-pose.pt）
 FALLBACK_MODEL = "/Users/henry/git/AI-Projects/YOLO/yolo-mlx/models/yolo26n-pose.pt"

@@ -28,7 +28,7 @@ if not os.path.exists(LSTM_MODEL):
         LSTM_MODEL = os.path.join(PROJECT_ROOT, "models", "lstm_multitask.pt")
         NORM_PARAMS = os.path.join(PROJECT_ROOT, "models", "norm_params.npz")
 
-ARCHIVE = r"C:\Users\y'y'x\Downloads\archive"
+ARCHIVE = r"/Volumes/media-backup/AI-data/dataset/falldown/Le2i-v2"
 WINDOW = 30
 KEYPOINTS_DIR = os.path.join(PROJECT_ROOT, "yolo_keypoints")
 

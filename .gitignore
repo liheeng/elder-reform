@@ -12,3 +12,6 @@ runs/
 
 # Hard-case frames (regenerate with scripts/build/export_hard_cases.py)
 hard_cases/frames/
+
+# macOS
+.DS_Store

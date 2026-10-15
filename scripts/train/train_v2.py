@@ -12,7 +12,7 @@ train_v2.py
 
 用法:
     python scripts/train/train_v2.py                     # 用生产数据与路径
-    python scripts/train/train_v2.py --suffix _np        # 用 x_v2_np.npy 等，产物也带 _np 后缀
+    python scripts/train/train_v2.py --suffix _nonperson  # 用 x_v2_nonperson.npy 等，产物同后缀
     python scripts/train/train_v2.py --out-suffix _base  # 用生产数据训练但产物另存（不覆盖生产模型）
 """
 

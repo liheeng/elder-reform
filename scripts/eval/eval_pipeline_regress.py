@@ -23,7 +23,7 @@ eval_pipeline_regress.py
 
 用法:
     python scripts/eval/eval_pipeline_regress.py
-    python scripts/eval/eval_pipeline_regress.py --suffix _np
+    python scripts/eval/eval_pipeline_regress.py --suffix ""   # 切换前的旧模型
     python scripts/eval/eval_pipeline_regress.py --which normal
 """
 

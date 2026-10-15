@@ -1,14 +1,131 @@
-[
-  {
-    "scene": "Home_02",
-    "video_id": "47",
-    "frames": 288,
-    "windows": 52
-  },
-  {
-    "scene": "Home_02",
-    "video_id": "57",
-    "frames": 240,
-    "windows": 43
-  }
-]
+{
+  "_note": "本文件由 build_dataset_nonperson.py 生成，覆盖此前声称 Home_02 video 47/57 贡献 95 个 NON_PERSON 窗口的旧内容——那份记录从未生效，class_labels_v2.npy 中 class 3 样本数为 0，且那两个视频实测始终有人。",
+  "scene_id": 20,
+  "window_size": 30,
+  "stride": 3,
+  "min_det_ratio": 0.5,
+  "cameras": [
+    "fixed"
+  ],
+  "index_csv": "nonperson_index.csv",
+  "windows": 2174,
+  "clips": [
+    {
+      "status": "ok",
+      "frames": 713,
+      "det_frame_ratio": 1.0,
+      "windows_total": 228,
+      "windows_kept": 228,
+      "windows_dropped_low_det": 0,
+      "clip": "ebicycle-park-night-1.mp4",
+      "category": "ebicycle_park",
+      "lighting": "night",
+      "camera": "fixed",
+      "motion_mean": "1.61"
+    },
+    {
+      "status": "ok",
+      "frames": 1199,
+      "det_frame_ratio": 0.998,
+      "windows_total": 390,
+      "windows_kept": 390,
+      "windows_dropped_low_det": 0,
+      "clip": "ebicycle-park-night-2.mp4",
+      "category": "ebicycle_park",
+      "lighting": "night",
+      "camera": "fixed",
+      "motion_mean": "1.47"
+    },
+    {
+      "status": "ok",
+      "frames": 842,
+      "det_frame_ratio": 1.0,
+      "windows_total": 271,
+      "windows_kept": 271,
+      "windows_dropped_low_det": 0,
+      "clip": "ebicycle-park-night-3.mp4",
+      "category": "ebicycle_park",
+      "lighting": "night",
+      "camera": "fixed",
+      "motion_mean": "1.25"
+    },
+    {
+      "status": "ok",
+      "frames": 420,
+      "det_frame_ratio": 1.0,
+      "windows_total": 131,
+      "windows_kept": 131,
+      "windows_dropped_low_det": 0,
+      "clip": "ebicycle-park-night-4.mp4",
+      "category": "ebicycle_park",
+      "lighting": "night",
+      "camera": "fixed",
+      "motion_mean": "1.64"
+    },
+    {
+      "status": "ok",
+      "frames": 802,
+      "det_frame_ratio": 1.0,
+      "windows_total": 258,
+      "windows_kept": 258,
+      "windows_dropped_low_det": 0,
+      "clip": "ebicycle-park-night-5.mp4",
+      "category": "ebicycle_park",
+      "lighting": "night",
+      "camera": "fixed",
+      "motion_mean": "2.32"
+    },
+    {
+      "status": "ok",
+      "frames": 750,
+      "det_frame_ratio": 1.0,
+      "windows_total": 241,
+      "windows_kept": 241,
+      "windows_dropped_low_det": 0,
+      "clip": "ebicycle-park-night-6.mp4",
+      "category": "ebicycle_park",
+      "lighting": "night",
+      "camera": "fixed",
+      "motion_mean": "2.01"
+    },
+    {
+      "status": "ok",
+      "frames": 962,
+      "det_frame_ratio": 0.994,
+      "windows_total": 311,
+      "windows_kept": 311,
+      "windows_dropped_low_det": 0,
+      "clip": "ebicycle-park-night-7.mp4",
+      "category": "ebicycle_park",
+      "lighting": "night",
+      "camera": "fixed",
+      "motion_mean": "1.52"
+    },
+    {
+      "status": "ok",
+      "frames": 631,
+      "det_frame_ratio": 1.0,
+      "windows_total": 201,
+      "windows_kept": 201,
+      "windows_dropped_low_det": 0,
+      "clip": "ebicycle-park-night-8.mp4",
+      "category": "ebicycle_park",
+      "lighting": "night",
+      "camera": "fixed",
+      "motion_mean": "1.88"
+    },
+    {
+      "status": "ok",
+      "frames": 458,
+      "det_frame_ratio": 1.0,
+      "windows_total": 143,
+      "windows_kept": 143,
+      "windows_dropped_low_det": 0,
+      "clip": "ebicycle-park-night-9.mp4",
+      "category": "ebicycle_park",
+      "lighting": "night",
+      "camera": "fixed",
+      "motion_mean": "2.52"
+    }
+  ]
+}

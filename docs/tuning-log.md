@@ -9,6 +9,7 @@
 
 ## 目录
 
+- [2026-10-15 · NON_PERSON 数据补齐：误检被吸收，但首报警帧指标被种子噪声淹没](#2026-10-15--non_person-数据补齐误检被吸收但首报警帧指标被种子噪声淹没)
 - [2026-10-14 · 车被识别成"人"：车类交叉验证（已验证，未接入）](#2026-10-14--车被识别成人车类交叉验证已验证未接入)
 - [2026-10-14 · 降低 conf 提召回，并抬高 WARNING 阈值消除边缘黄框](#2026-10-14--降低-conf-提召回并抬高-warning-阈值消除边缘黄框)
 - [2026-10-14 · NON_PERSON 类训练样本为 0](#2026-10-14--non_person-类训练样本为-0)
@@ -19,6 +20,121 @@
 - [如何复现](#如何复现)
 - [难例集](#难例集)
 - [新增条目模板](#新增条目模板)
+
+---
+
+## 2026-10-15 · NON_PERSON 数据补齐：误检被吸收，但首报警帧指标被种子噪声淹没
+
+**涉及文件**：`scripts/build/build_dataset_nonperson.py`（新增）、`scripts/build/merge_nonperson_v2.py`（新增）、
+`scripts/train/train_v2.py`、`scripts/eval/eval_pipeline_regress.py`（新增）、`scripts/eval/eval_nonperson_effect.py`（新增）
+
+承接 [2026-10-14 · NON_PERSON 类训练样本为 0](#2026-10-14--non_person-类训练样本为-0) 的"修法"决策。
+素材到位后执行补齐，并验证两件事：**① 这个类是否真的学到 ② 会不会把真人推成非人**。
+
+### 现象
+
+用户采集了 13 段真实场景素材（白天 4 + 夜间 9，合计 6.8 分钟）。
+需要确认：既能吸收"电动车/车罩被当成行人"这类持续性误检，又不能反过来把真人判成非人。
+
+### 根因与前提核实
+
+动手前先核了三件事，每一件都改变了方案：
+
+1. **生产链路用的是 `lstm_v2.pt`（4 类），不是 5 类模型。**
+   `realtime_detect.py` 加载 `lstm_v2.pt + norm_v2.npz`；`models/` 里**根本没有**
+   `lstm_5class.pt`。而 `class_labels_5class.npy`(`x.npy`, 19418 样本) 是另一条**遗留旁支**
+   （它的 `WARNING(1)` 也是 0 样本）。**差一点把数据接错分支。**
+2. **`processed/nonperson_meta.json` 是失实记录**（声称 Home_02 47/57 贡献 95 个窗口，
+   实际从未落地）。已由新脚本产出的真实来源记录覆盖。
+3. **机位筛选砍掉了 4/13 素材。** 白天 4 段全是手持（运动均值 7.63–24.67），
+   按采集规范只能取 9 段固定机位夜间素材（1.25–2.52），合计 **3.8 分钟 / 2174 个窗口**。
+
+### 改动
+
+| 文件 | 改动 |
+|---|---|
+| `scripts/build/build_dataset_nonperson.py` | 新增。读 `dataset/nonperson_index.csv`，**只取 `has_person=no` + `no_person_verified=yes` + `camera=fixed`**（红线在代码里硬性执行）→ 复用 `extract_video`/`build_window_features` 保持与 Le2i 同口径 → 30 帧窗/stride 3 → 全标 `NON_PERSON(3)`，`risk=0.0`/`time=999`（与 SAFE 一致，因而自动被 `valid_time=(risk>0)&(time<1.0)` 排除在 time 损失外） |
+| 同上 | 只保留"窗口内 ≥50% 帧有检出"的窗口。NON_PERSON 要教的是"检测器以为有人、其实没有"；纯零检出窗口学到的是"全零输入⇒非人"，对抑制误报无用。实测该过滤 0 丢弃——夜间素材**每帧都检出**（检出帧占比 1.000） |
+| 同上 | `scene_id=20`，刻意不进任何折的测试集：9 段同属一个场景，拆进测试集等于同场景泄露 |
+| `scripts/build/merge_nonperson_v2.py` | 新增。把分片并入 v2 数据集，输出 `x_v2_np.npy` 等；写入前**校验 scene_id 不重叠**（否则会打乱 LOSO 折组） |
+| `scripts/train/train_v2.py` | 加 `--suffix`（数据+产物）、`--out-suffix`（仅产物，用于"用生产数据训练但另存"）、`--seed`。**三个参数默认值都保持原行为**，是为了让 A/B 不覆盖生产模型 |
+| `scripts/eval/eval_pipeline_regress.py` | 新增。端到端回归 harness：跑真实的 `realtime_detect.main()`（monkeypatch 截获状态），`--suffix` 切换模型做 A/B |
+| `scripts/eval/eval_nonperson_effect.py` | 新增。在**未参与训练**的误检素材上直接测模型判 NON_PERSON 的比例 |
+
+**类别权重**：合并后 `NON_PERSON` 权重 3.045（`SAFE` 0.342、`SITTING` 3.789），与既有 SITTING 同量级。
+
+### 效果
+
+**① 机制确实生效**（决定性证据）
+
+在**未参与训练**的 4 段手持误检素材（1208 个窗口，实测探测器持续误报）上直接看类别输出：
+
+| 模型 | NON_PERSON 占比 | NON_PERSON 平均概率 |
+|---|---|---|
+| 生产 `lstm_v2` | **0.0%** | 0.005 |
+| 重训基线（无分片） | **0.0%** | 0.002 |
+| **加入分片** | **68.9%** | **0.676** |
+
+基线是 0% —— 这个类此前**从机制上就不存在**（`risk_engine_v2` 里那条
+`NON_PERSON → 风险强制 0` 是死代码）。同时 FALLEN 误判没有增加（7.1% → 6.1%）。
+
+**② 离线指标：看似退化 16pp，实为种子噪声**
+
+| 训练 | SAFE | FALLEN | SITTING | 总体 acc |
+|---|---|---|---|---|
+| 基线 · 无种子 | 96.32% | 82.92% | 91.53% | 94.22% |
+| 加入分片 · 无种子 | 95.16% | 84.40% | 75.39% | 92.33% |
+| 基线 · seed=1 | 96.27% | 78.33% | 79.45% | 92.72% |
+| 加入分片 · seed=1 | 94.43% | 83.02% | 79.85% | 91.89% |
+
+SITTING 召回看着掉了 16.14pp，但**基线自己两次跑的跨度就有 12.08pp**；
+**同种子对比只有 +0.40pp**。`train_v2.py` 原本不设随机种子，单次对比会得出错误结论。
+
+**③ 端到端回归（4 次运行）**
+
+| 指标 | 基线·无种子 | 加入分片·无种子 | 基线·seed1 | 加入分片·seed1 |
+|---|---|---|---|---|
+| 正常 7 段 WARNING/DANGER | ✅ 全 0 | ✅ 全 0 | ✅ 全 0 | ✅ 全 0 |
+| 跌倒 5 段 首DANGER 均值 | 186.2 | 178.2 | 186.0 | 170.6 |
+| 真实 6 段 首DANGER 均值 | 152.5 | 125.7 | **199.0** | **127.3** |
+| 真实 6 段 DANGER 占比均值 | 41.9% | 46.4% | 41.6% | 41.1% |
+
+- **正常 7 段在 4 次运行里全部为 0** —— 这是必须守住的底线，稳。
+- 跌倒组基本持平（均值差 8–15 帧 / 186 帧）。
+- 真实组：基线自己两个种子差 **46 帧**，而加入分片两次都是 ~126–127。
+  方向有利于新模型，但**基线噪声大于组间差异**，只能算"倾向"，不构成结论。
+
+### 踩过的坑
+
+1. **差点接错训练分支。** 先按 5 类模型（`train_5class.py` + `x.npy`）设计了整套方案，
+   写到给 `train_5class.py` 加参数时才发现生产链路用的是 `lstm_v2.pt`。
+   **教训：动数据之前先确认"线上到底加载哪个模型"**，不要从文档或文件名推断。
+2. **运动量测量没钉死采样步长，数字差 2 倍。** 同一批夜间素材 `stride=1` 得 1.25–2.52，
+   `stride=5` 得 2.35–5.24。按阈值 3 判定，后者会把 **5 段合格的固定机位素材误判成手持**
+   而要求重拍。已在 `docs/nonperson-collection.md` 钉死测量方法。
+3. **训练脚本没有随机种子，差点把噪声当结论。** 第一次对比看到 SITTING −16.14pp
+   就直接准备写"退化"了；补了 `--seed` 做配对实验才发现基线自身跨度 12.08pp。
+   **涉及模型重训的 A/B，必须先固定种子或做多次取均值。**
+4. **混淆矩阵解析用的正则漏行。** `RESULT (\S+ ?\S*)` 匹配不到 `FALL Office 1` 这种
+   "前缀 + 两个 token" 的标签，导致第一版对比表里 FALL 行是空的却看不出来。
+   **教训：解析日志后要和原始输出对行数。**
+5. `np.where(counts == 0, 0.0, ...)` 会先按 0 除再选，产生 `divide by zero` 警告
+   （既有代码本就有此写法，新脚本加了 `np.errstate` 静音）。
+
+### 遗留
+
+- **数据只有 3.8 分钟、且只有"夜间停车棚"一个场景。** 模型可能学到"这个车棚不是人"，
+  而非"车/车罩不是人"。真正的跨场景泛化没验证过。
+- **缺 `has_person=yes` 对照素材**，所以"镜头静止/场景不动 ⇒ 非人"这条捷径无法直接证伪。
+  间接守门是 Le2i 12 段与真实 6 段（正常段全 0）。
+- 白天 4 段因机位不合格被排除，其误检信息未利用。
+- **首DANGER 帧这个指标方差偏大**（同一模型两个种子能差 46 帧）。后续调优建议固定种子、
+  或以多种子均值 + 区间呈现，不要用单次运行的单个数字。
+- `scripts/eval/verify_real_videos.py` 已过期：它引用 `lstm_5class.pt` / `lstm_4class.pt` /
+  `lstm_multitask.pt` 这些**不存在的模型**并静默回退，且用旧的 `LSTMClassifier`。
+  已被 `scripts/eval/eval_pipeline_regress.py` 取代，本次未删除。
+- **生产模型未替换。** `_np` 系列产物（`models/lstm_v2_np.pt` 等）已生成但未启用；
+  原生产模型备份在 `models/backup_pre_nonperson/`（md5 已核对）。是否切换由使用方决定。
 
 ---
 
@@ -267,8 +383,11 @@ processed/class_labels_5class.npy -> {0: 11931, 2: 3006, 4: 4481}       # 1(WARN
    后果是漏报，比现在的误检更严重。
 2. **优先覆盖**我们实测到的误检类型：带车罩的停放电动车 ★★★、静态车辆 ★★★、
    室内家具 ★★、墙面/海报 ★★、镜面反射 ★、杂物 ★。
-3. 总量 **60–120 分钟**素材（约 1000–3000 个 NON_PERSON 窗口），但要**"越像人越好"**
-   而不是越多越好 —— pose 根本不误检的空场景对训练贡献很小。
+3. ~~总量 60–120 分钟素材（约 1000–3000 个 NON_PERSON 窗口）~~ **此处原换算有误，已更正**：
+   实际是 25fps（`build_dataset_5class.py` 的 `subsample_to_10fps()` 内部 `step=1`，是空操作），
+   `1 分钟素材 ≈ 500 个窗口`。故 60–120 分钟会产出 3 万–6 万窗口，是 `SAFE`(约 19000) 的 1.5–3 倍，
+   **反而制造类别失衡**。正确目标是 **5–20 分钟（约 2500–10000 窗口）**。
+   要**"越像人越好"**而不是越多越好 —— pose 根本不误检的空场景对训练贡献很小。
 4. `Home_02` 47/57 **不可用**（经核实始终有人），这是当年 95 个窗口未能落地的原因。
 5. 拿到素材后：跑 PoseExtractor 做有效性检查 → 人工复核疑似有人的帧 → 构建数据集 →
    重训 → **三套评估**（难例集 / Le2i 12 段 / 真实 6 段）。
@@ -639,9 +758,11 @@ score 0.79），唯一干净的判据是检测置信度——但那等于把 `co
 以下命令产出的数字即为本文档引用的数据。
 
 ```bash
-# 1. 跌倒/正常视频的端到端回归（驱动真实的 realtime_detect.main()）
-#    输出：每段的 首WARNING / 首DANGER / DANGER 占比
-#    （脚本为一次性探针，见 docs/tuning-log.md 附注；核心逻辑是 monkeypatch cv2.imshow）
+# 1. 端到端回归（在单进程内驱动真实的 realtime_detect.main()）
+#    输出：每段的 首WARNING / 首DANGER / DANGER 占比 + 正常段是否守住 0 报警
+#    --suffix 切换模型做 A/B（空=生产模型）；Le2i 归档需已挂载 /Volumes/media-backup
+python scripts/eval/eval_pipeline_regress.py
+python scripts/eval/eval_pipeline_regress.py --suffix _np --which real
 
 # 2. 逐帧跟踪诊断（新建 ID 次数、僵尸轨道、丢失段）
 #    需要统计 person_falldown-3.mp4 的 990 帧
@@ -653,16 +774,31 @@ python scripts/eval/eval_hard_cases.py --models models/yolo26n-pose.pt models/�
 # 4. 检出链阈值扫描（三种规则 × conf 的召回/误报对比）
 python scripts/eval/sweep_detection_gate.py --list-fp
 
-# 5. Home_01 video(10) 的沙发误报 A/B（复现"朴素下调 0.20 被拦下"的证据）
+# 5. NON_PERSON 生效检查（在未参与训练的误检素材上看类别输出）
+#    生产 / 重训基线都是 0.0%，加入分片的模型 68.9%
+python scripts/eval/eval_nonperson_effect.py --suffixes "",_baseline,_np
+
+# 6. 重建 NON_PERSON 分片并并入 v2 数据集（幂等，可反复跑）
+python scripts/build/build_dataset_nonperson.py            # 抽点有缓存，--force 可强制重抽
+python scripts/build/merge_nonperson_v2.py                 # 产出 x_v2_np.npy 等
+
+# 7. 重训（务必用 --out-suffix 或 --suffix，避免覆盖生产模型；对比实验必须带 --seed）
+python scripts/train/train_v2.py --suffix ""      --out-suffix _baseline --seed 1
+python scripts/train/train_v2.py --suffix _np     --out-suffix _np         --seed 1
+
+# 8. Home_01 video(10) 的沙发误报 A/B（复现"朴素下调 0.20 被拦下"的证据）
 #    单独跑该视频，观察首次 DANGER 帧：
 #      单一 0.30 / 复合门 -> 112 ;  朴素 0.20 -> 50
 python realtime_detect.py "/Volumes/media-backup/AI-data/dataset/falldown/Le2i-v2/Home_01/Home_01/Videos/video (10).avi"
 #    该视频标注的跌倒区间为 135-150（Annotation_files/video (10).txt 前两行）
 ```
 
-> 一次性探针脚本未入库（属于排查工具）。要长期复跑的是：
-> `scripts/eval/verify_real_videos.py`（Le2i 回归）、`scripts/eval/eval_hard_cases.py`（难例集）、
-> `scripts/eval/verify_issues.py`。
+> 要长期复跑的评估入口：
+> `scripts/eval/eval_pipeline_regress.py`（端到端回归）、`scripts/eval/eval_hard_cases.py`（难例集）、
+> `scripts/eval/eval_nonperson_effect.py`（NON_PERSON 生效检查）、`scripts/eval/verify_issues.py`。
+>
+> **注意**：`scripts/eval/verify_real_videos.py` 已过期，它引用 `lstm_5class.pt` /
+> `lstm_4class.pt` / `lstm_multitask.pt` 这些不存在的模型并静默回退，不要再用。
 
 ---
 
@@ -716,7 +852,8 @@ python realtime_detect.py "/Volumes/media-backup/AI-data/dataset/falldown/Le2i-v
   要定死"放宽阈值是否引入物品误报"必须扩负样本集。
 - `Home_02` 47/57 原以为是现成的"家具/无人"负样本源，实测**两段视频始终有人**，不可用。
 - 只有 2 帧带 bbox，`召回@IoU` 仅作抽查，不构成统计结论。
-- 正样本偏向"夜间倒地"，白天室内场景请用 `scripts/eval/verify_real_videos.py` 的 Le2i 回归。
+- 正样本偏向"夜间倒地"，白天室内场景请用 `scripts/eval/eval_pipeline_regress.py` 的 Le2i 回归。
+  （`scripts/eval/verify_real_videos.py` 已过期，引用的是不存在的模型文件，不要再用。）
 
 ---
 

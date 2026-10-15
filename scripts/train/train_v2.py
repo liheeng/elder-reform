@@ -9,9 +9,15 @@ train_v2.py
   - 3-fold Leave-One-Scene-Out cross-validation
   - Temperature scaling for class head only
   - Final retrain on all data
+
+用法:
+    python scripts/train/train_v2.py                     # 用生产数据与路径
+    python scripts/train/train_v2.py --suffix _np        # 用 x_v2_np.npy 等，产物也带 _np 后缀
+    python scripts/train/train_v2.py --out-suffix _base  # 用生产数据训练但产物另存（不覆盖生产模型）
 """
 
 import os
+import argparse
 import sys
 import numpy as np
 import torch
@@ -214,17 +220,38 @@ def train_fold(train_loader, val_loader, class_weights, fold_id):
 # Main
 # ==================================================
 def main():
+    ap = argparse.ArgumentParser(description="v2 4 类 + risk 训练（3 折 LOSO）")
+    ap.add_argument("--suffix", default="",
+                    help="数据与产物文件名后缀；默认空=使用生产文件与路径")
+    ap.add_argument("--out-suffix", default=None,
+                    help="仅产物后缀；默认与 --suffix 一致。"
+                         "用于「用生产数据训练但写到别的文件名」，避免覆盖生产模型")
+    ap.add_argument("--seed", type=int, default=None,
+                    help="随机种子；默认 None=不固定（保持既有行为）。"
+                         "对比实验请显式指定，否则跑两次结果有差异")
+    args = ap.parse_args()
+    sfx = args.suffix
+    out_sfx = sfx if args.out_suffix is None else args.out_suffix
+
+    if args.seed is not None:
+        import random
+        random.seed(args.seed)
+        np.random.seed(args.seed)
+        torch.manual_seed(args.seed)
+
     print("=" * 60)
     print("V2 4-Class + Risk Training with 3-fold LOSO CV")
     print("=" * 60)
+    if sfx:
+        print(f"文件名后缀: {sfx}")
 
     # ---- 1. Load Data ----
     print("\nLoading data...")
-    X = np.load(os.path.join(PROCESSED_DIR, "x_v2.npy"))
-    y_class = np.load(os.path.join(PROCESSED_DIR, "class_labels_v2.npy"))
-    y_risk = np.load(os.path.join(PROCESSED_DIR, "risk_labels_v2.npy"))
-    y_time = np.load(os.path.join(PROCESSED_DIR, "time_labels_v2.npy"))
-    vids = np.load(os.path.join(PROCESSED_DIR, "video_ids_v2.npy"))
+    X = np.load(os.path.join(PROCESSED_DIR, f"x_v2{sfx}.npy"))
+    y_class = np.load(os.path.join(PROCESSED_DIR, f"class_labels_v2{sfx}.npy"))
+    y_risk = np.load(os.path.join(PROCESSED_DIR, f"risk_labels_v2{sfx}.npy"))
+    y_time = np.load(os.path.join(PROCESSED_DIR, f"time_labels_v2{sfx}.npy"))
+    vids = np.load(os.path.join(PROCESSED_DIR, f"video_ids_v2{sfx}.npy"))
     print(f"  X: {X.shape}, y_class: {y_class.shape}, y_risk: {y_risk.shape}, y_time: {y_time.shape}, vids: {vids.shape}")
 
     # ---- 2. Normalize ----
@@ -232,9 +259,9 @@ def main():
     mean = X.mean(axis=(0, 1), keepdims=True)
     std = X.std(axis=(0, 1), keepdims=True) + 1e-8
     X = (X - mean) / std
-    np.savez(os.path.join(MODEL_DIR, "norm_v2.npz"),
+    np.savez(os.path.join(MODEL_DIR, f"norm_v2{out_sfx}.npz"),
              mean=mean.squeeze(), std=std.squeeze())
-    print(f"  Norm params saved -> {MODEL_DIR}/norm_v2.npz")
+    print(f"  Norm params saved -> {MODEL_DIR}/norm_v2{out_sfx}.npz")
 
     # ---- 3. Class Weights ----
     counts = np.bincount(y_class, minlength=NUM_CLASSES).astype(np.float32)
@@ -298,7 +325,7 @@ def main():
                 all_test_true_class.extend(y_cls_batch.numpy())
                 all_test_true_risk.extend(y_risk_batch.numpy())
 
-        torch.save(model.state_dict(), os.path.join(MODEL_DIR, f"lstm_v2_fold{fold_idx+1}.pt"))
+        torch.save(model.state_dict(), os.path.join(MODEL_DIR, f"lstm_v2_fold{fold_idx+1}{out_sfx}.pt"))
         print(f"  Model saved -> lstm_v2_fold{fold_idx+1}.pt")
 
     # ---- 5. Temperature Scaling (class head only) ----
@@ -323,8 +350,8 @@ def main():
     best_T = float(res.x)
     print(f"  Best temperature: {best_T:.4f}")
 
-    np.savez(os.path.join(MODEL_DIR, "temperature_v2.npz"), T=best_T)
-    print(f"  Saved -> {MODEL_DIR}/temperature_v2.npz")
+    np.savez(os.path.join(MODEL_DIR, f"temperature_v2{out_sfx}.npz"), T=best_T)
+    print(f"  Saved -> {MODEL_DIR}/temperature_v2{out_sfx}.npz")
 
     # ---- 6. Final Class Metrics ----
     print(f"\n{'='*60}")
@@ -426,7 +453,7 @@ def main():
             break
 
     model.load_state_dict(best_state)
-    final_path = os.path.join(MODEL_DIR, "lstm_v2.pt")
+    final_path = os.path.join(MODEL_DIR, f"lstm_v2{out_sfx}.pt")
     torch.save(model.state_dict(), final_path)
     print(f"\nFinal model saved -> {final_path}")
     print("\nDone.")

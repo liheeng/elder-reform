@@ -53,7 +53,7 @@
 | 分辨率 | **≥ 1280×720**，建议 1920×1080 | 夜间素材分辨率太低会再造一个"域"，训练与部署不一致 |
 | 帧率 | 25–30 fps | 与现有素材一致（`WINDOW_SIZE=30` 对应约 1–1.2 秒） |
 | 单段时长 | **≥ 60 秒**，建议 2–5 分钟 | 30 帧滑窗 + stride=3，短片段出不了几个窗口 |
-| 机位 | **固定摄像头**，俯视/斜俯视 | 与部署场景（走廊/客厅/门口）一致；手持晃动会引入无用变化 |
+| 机位 | **必须固定摄像头**（三脚架/支架/固定安装），俯视或斜俯视 | 与部署场景（走廊/客厅/门口）一致。**手持/平移镜头不可用**（见下方验收标准） |
 | 光照 | **白天与夜间都要**，夜间优先 | 夜间才是当前误检最严重的场景 |
 | 画面内 | **不得有真人**（见第一节红线） | — |
 | 其他 | 尽量包含目标**长时间静止**的镜头 | 停放车辆/家具的误检是持续性的，静止镜头最有代表性 |
@@ -67,14 +67,49 @@
 
 ---
 
+## 三之二、两条补充要求（2026-10-15 实测后追加）
+
+### 1. 必须固定机位，且要能量化验收
+
+第一批素材里出现了**手持/平移**镜头（运动均值 7.6–23.5），而部署是固定机位。这会造成
+域差异，且可能让模型学到一条**反向伤害**的捷径：
+
+> 若素材普遍"无人 + 镜头在动"，模型可能学到「**画面整体在动 ⇒ 这是非人**」。
+> 那么固定机位下真人在动时，反而可能被推向 NON_PERSON —— 等于把真人判成"非人"。
+
+**验收标准**（可复现）：对每段算帧间灰度差均值（缩放到 320×180 后逐帧相减取均值）。
+
+| 素材 | 运动均值（实测） | 判定 |
+|---|---|---|
+| 固定机位夜间停车棚 | **1.25 – 2.52** | ✅ 合格 |
+| 手持拍摄（第一天素材） | **7.6 – 23.5** | ❌ 不合格 |
+
+**采集时/交付前**：运动均值 **> 3** 的片段请重拍或标注为"手持"。
+
+### 2. 必须同时采集"画面里有人"的素材，且比例不低于 1/3
+
+只用"无人"素材训练，模型无法知道自己该**在什么条件下不说 NON_PERSON**，
+容易退化成"看到某一类画面就判非人"。所以需要用**同机位、同光照、同场景**下
+**有人正常活动**的片段作对照。
+
+要求：
+
+- **同一批采集里就要包含**，不要事后补（同机位/同时段/同光照才有对照意义）
+- 画面里的人做**正常活动**即可（走动、坐着、骑车站立），**不需要跌倒**
+- 建议比例：**有人 : 无人 ≥ 1 : 3**（即有人素材占总时长 1/3 以上）
+- 这些片段标 `has_person = yes`，我构建数据集时会**排除它们**（不能进 NON_PERSON），
+  但会用它们验证"训练后的模型不会把真人判成非人"
+
+---
+
 ## 四、目录与命名规范
 
 ```
 dataset/
 └── nonperson_raw/                    # 原始素材，不入 git（.gitignore 已含 dataset/）
-    ├── scooter_cover/                #   类别目录（见下表）
-    │   ├── scooter_cover_day_01.mp4
-    │   └── scooter_cover_night_01.mp4
+    ├── ebicycle_park/                #   类别目录（见下表）
+    │   ├── ebicycle_park_day_01.mp4
+    │   └── ebicycle_park_night_01.mp4
     ├── static_vehicle/
     ├── furniture_indoor/
     ├── poster_wall/
@@ -86,7 +121,7 @@ dataset/
 
 | 目录名 | 对应第二节 |
 |---|---|
-| `scooter_cover` | 带车罩的停放电动车/摩托车 |
+| `ebicycle_park` | 带车罩的停放电动车/摩托车 |
 | `static_vehicle` | 静态车辆（停车场） |
 | `furniture_indoor` | 室内家具 |
 | `poster_wall` | 墙面/海报/告示牌 |
@@ -96,7 +131,7 @@ dataset/
 文件命名：`<类别前缀>_<光照day|night>_<序号两位>.mp4`，例如：
 
 ```
-scooter_cover_night_01.mp4
+ebicycle_park_night_01.mp4
 static_vehicle_day_03.mp4
 ```
 
@@ -107,13 +142,17 @@ static_vehicle_day_03.mp4
 采完请填 `dataset/nonperson_index.csv`（**这个文件要入 git**，与原始视频分开）：
 
 ```csv
-file,category,lighting,duration_s,resolution,fps,captured_at,no_person_verified,note
-nonperson_raw/scooter_cover/scooter_cover_night_01.mp4,scooter_cover,night,185,1920x1080,30,2026-10-15,yes,小区车棚夜间
+file,category,lighting,camera,has_person,no_person_verified,duration_s,resolution,fps,captured_at,motion_mean,note
+nonperson_raw/ebicycle_park/ebicycle_park_night_01.mp4,ebicycle_park,night,fixed,no,yes,23.8,1920x1080,30,2026-10-15,1.6,小区车棚夜间固定机位
+nonperson_raw/ebicycle_park/ebicycle_park_night_02.mp4,ebicycle_park,night,fixed,yes,-,40.0,1920x1080,30,2026-10-15,1.5,同机位有人经过(对照用)
 ```
 
 | 列 | 说明 |
 |---|---|
-| `no_person_verified` | 必须手填 `yes`。填 `yes` 表示你已**从头到尾看过**并确认无真人 |
+| `camera` | `fixed` 或 `handheld`。**`handheld` 的片段不作为主力** |
+| `has_person` | `yes` 表示画面里有人（对照素材，构建数据集时会排除） |
+| `no_person_verified` | 仅 `has_person = no` 时需要，必须手填 `yes`：表示你已**从头到尾看过**并确认无真人。`has_person = yes` 的填 `-` |
+| `motion_mean` | 帧间灰度差均值（缩放到 320×180）。**> 3 视为手持**，请重拍 |
 | `note` | 简述场景（机位、光照、目标类型），便于日后复现 |
 
 ---

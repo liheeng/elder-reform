@@ -174,7 +174,9 @@ elder-master-reformv4/
 ├── docs/                        # 文档
 │   ├── architecture.md          #   架构与已知问题详解
 │   ├── classification-logic.md  #   分类逻辑详解
-│   └── tuning-log.md            #   调优记录（现象/根因/改动/效果）
+│   ├── optimization-review.md   #   优化过程回顾（四段式 + 方法论 + 术语小抄）
+│   ├── nonperson-collection.md  #   NON_PERSON 负样本采集规范
+│   └── tuning-log.md            #   调优记录（现象/根因/改动/效果，按时间倒序）
 │
 ├── hard_cases/                  # 难例集（夜间/倒地/遮挡场景）
 │   ├── frames/                  #   候选帧（不入 git，可由脚本重新生成）
@@ -368,7 +370,7 @@ pip install ultralytics opencv-python numpy scikit-learn scipy
 | SAFE | 0 | 0.0 或指数衰减 | 999 或 time/PRE_FALL | 跌倒前或正常视频 |
 | FALLEN | 1 | 1.0 | 0 | 跌倒结束后或跌倒过程中 |
 | SITTING | 2 | 0.0 | 999 | 窗口内坐姿占比 ≥60% |
-| NON_PERSON | 3 | 0.0 | 999 | 意图来源为 Home_02 47/57，但**当前数据集里该类样本数为 0**，见 [docs/tuning-log.md](docs/tuning-log.md) |
+| NON_PERSON | 3 | 0.0 | 999 | 由**已确认无人的真实场景素材**构建（2026-10-15 起，2174 个窗口 / 9 段夜间停车棚），见 [docs/nonperson-collection.md](docs/nonperson-collection.md)。注意其**有效独立样本仅约 223 个、单一场景**，泛化能力有限，见 [docs/optimization-review.md](docs/optimization-review.md) |
 
 **风险衰减**：对于跌倒前窗口（距跌倒 `PRE_FALL=120` 帧内）：
 ```
@@ -515,7 +517,9 @@ python scripts/eval/eval_hard_cases.py
 python scripts/eval/sweep_detection_gate.py --list-fp
 ```
 
-每次针对实际运行问题的调优记录（现象/根因/改动/效果）见 [docs/tuning-log.md](docs/tuning-log.md)。
+每次针对实际运行问题的调优记录（现象/根因/改动/效果）见 [docs/tuning-log.md](docs/tuning-log.md)；
+按「发现什么问题 → 解决思路 → 怎么做的 → 结果如何」重新整理的回顾、方法论总结与术语小抄，
+见 [docs/optimization-review.md](docs/optimization-review.md)。
 
 | 测试集 | 视频数 | 预期 | 状态 |
 |----------|--------|----------|--------|

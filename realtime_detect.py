@@ -20,9 +20,11 @@ from pipeline.risk_engine_v2 import RiskEngineV2
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 MODEL_DIR = os.path.join(PROJECT_ROOT, "models")
 POSE_MODEL = os.path.join(MODEL_DIR, "yolo26n-pose.pt")
-LSTM_MODEL = os.path.join(MODEL_DIR, "lstm_v2.pt")
-NORM_PARAMS = os.path.join(MODEL_DIR, "norm_v2.npz")
-TEMP_PARAMS = os.path.join(MODEL_DIR, "temperature_v2.npz")
+# 2026-10-15 起启用含 NON_PERSON 分片的 v2 模型（此前该类样本数为 0，等于没有出口）。
+# 切换前后对比见 docs/tuning-log.md；改名前的旧模型备份在 models/backup_pre_nonperson/。
+LSTM_MODEL = os.path.join(MODEL_DIR, "lstm_v2_nonperson.pt")
+NORM_PARAMS = os.path.join(MODEL_DIR, "norm_v2_nonperson.npz")
+TEMP_PARAMS = os.path.join(MODEL_DIR, "temperature_v2_nonperson.npz")
 
 WINDOW_SIZE = 30          # 30帧窗口 (原生帧率, ~1.2秒)
 FEATURE_DIM = 64           # 每帧64维 (FeatureBuilderV2)

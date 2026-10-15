@@ -48,7 +48,7 @@ def describe(y, title):
 
 def main():
     ap = argparse.ArgumentParser(description="把 NON_PERSON 分片并入 v2 数据集")
-    ap.add_argument("--suffix", default="_np", help="输出文件名后缀")
+    ap.add_argument("--suffix", default="_nonperson", help="输出文件名后缀")
     ap.add_argument("--shard-prefix", default="nonperson_v2",
                     help="分片文件前缀（见 build_dataset_nonperson.py）")
     ap.add_argument("--dry-run", action="store_true")

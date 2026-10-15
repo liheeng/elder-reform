@@ -153,14 +153,13 @@ elder-master-reformv4/
 │   ├── risk_engine.py           #   REFORM 版本（4 类/5 类）
 │   └── risk_engine_v2.py        #   V2 版本（双头融合）
 │
-├── models/                      # 已训练权重（23 个文件）
+├── models/                      # 已训练权重（该目录不入 git，需另行获取或重训）
 │   ├── yolo26n-pose.pt          #   YOLO 姿态模型
-│   ├── lstm_v2.pt               #   V2 多任务模型（最终版）
-│   ├── lstm_v2_fold{1-3}.pt     #   V2 交叉验证折叠模型
-│   ├── lstm_5class.pt           #   5 类模型（最终版）
-│   ├── lstm_4class.pt           #   4 类模型（REFORM 遗留）
-│   ├── norm_v2.npz              #   V2 归一化参数
-│   └── temperature_v2.npz       #   温度缩放值
+│   ├── lstm_v2_nonperson.pt     #   V2 多任务模型（当前生产版，含 NON_PERSON 分片）
+│   ├── lstm_v2_fold{1-3}_nonperson.pt  # 该版本的交叉验证折叠模型
+│   ├── lstm_v2.pt              #   V2 多任务模型（2026-10-15 切换前的旧版）
+│   ├── norm_v2_nonperson.npz    #   归一化参数（与生产模型配套，必须同源）
+│   └── temperature_v2_nonperson.npz    # 温度缩放值（同上）
 │
 ├── processed/                   # 预处理后的训练数据
 │   ├── x_v2.npy                 #   V2 特征 (M, 30, 192)
@@ -456,7 +455,7 @@ python realtime_detect.py "路径/视频.avi"
 ```
 
 脚本执行流程：
-1. 打开视频文件或摄像头（默认加载 `lstm_v2.pt` + `norm_v2.npz` + `temperature_v2.npz`）
+1. 打开视频文件或摄像头（默认加载 `lstm_v2_nonperson.pt` + `norm_v2_nonperson.npz` + `temperature_v2_nonperson.npz`）
 2. 逐帧运行完整流水线
 3. 显示彩色状态边界框：
    - **绿色** → SAFE（安全）
@@ -539,10 +538,9 @@ python scripts/eval/sweep_detection_gate.py --list-fp
 
 | 模型文件 | 类型 | 输入维度 | 输出 | 说明 |
 |------------|------|-----------|--------|-------------|
-| `lstm_v2.pt` | 多任务 | 192 | 类别(4)+风险+时间 | **V2 最终版**（全量数据训练） |
-| `lstm_5class.pt` | 分类 | 192 | 类别(5) | 5 类模型（SAFE/WARNING/FALLEN/NON_PERSON/SITTING） |
-| `lstm_4class.pt` | 分类 | 102 | 类别(4) | REFORM 遗留模型（SAFE/WARNING/FALLEN/NON_PERSON） |
-| `lstm_multitask.pt` | 回归 | 102 | 风险+时间 | 原始基线模型 |
+| `lstm_v2_nonperson.pt` | 多任务 | 192 | 类别(4)+风险+时间 | **V2 当前生产版**（2026-10-15 起，含 NON_PERSON 分片） |
+| `lstm_v2.pt` | 多任务 | 192 | 类别(4)+风险+时间 | 切换前的 V2 版本（NON_PERSON 样本数为 0），保留备查 |
+| `lstm_v2_baseline.pt` | 多任务 | 192 | 类别(4)+风险+时间 | 重训基线（固定种子对照用） |
 | `yolo26n-pose.pt` | 姿态（YOLO） | — | (17,2) 关键点 | Ultralytics nano 姿态模型 |
 
 ---

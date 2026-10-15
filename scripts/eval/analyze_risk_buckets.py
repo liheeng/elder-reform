@@ -8,11 +8,11 @@ from classifier.risk_classifier_v2 import RiskClassifierV2
 dev = "cuda" if torch.cuda.is_available() else "cpu"
 X = np.load(xf).astype(np.float32); R = np.load(rf).astype(np.float32)
 V = np.load(vf)
-norm = np.load(os.path.join(mdir, "norm_v2.npz"))
+norm = np.load(os.path.join(mdir, "norm_v2_nonperson.npz"))
 Xn = (X - norm["mean"].astype(np.float32)) / (norm["std"].astype(np.float32) + 1e-8)
 
 m = RiskClassifierV2(input_dim=192, num_classes=4)
-m.load_state_dict(torch.load(os.path.join(mdir, "lstm_v2.pt"), map_location=dev)); m.to(dev).eval()
+m.load_state_dict(torch.load(os.path.join(mdir, "lstm_v2_nonperson.pt"), map_location=dev)); m.to(dev).eval()
 P = np.empty(len(Xn), dtype=np.float32)
 with torch.no_grad():
     for i in range(0, len(Xn), 512):

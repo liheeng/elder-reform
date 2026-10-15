@@ -31,6 +31,13 @@
 承接 [2026-10-14 · NON_PERSON 类训练样本为 0](#2026-10-14--non_person-类训练样本为-0) 的"修法"决策。
 素材到位后执行补齐，并验证两件事：**① 这个类是否真的学到 ② 会不会把真人推成非人**。
 
+> **结论**：① 学到了 —— 未参与训练的误检素材上，判 `NON_PERSON` 的比例从 **0.0% → 68.9%**；
+> ② 没有把真人推成非人 —— 正常 Le2i 7 段在 4 次独立运行里**全部 0 报警**。
+> 该模型已于 **2026-10-15 切换为生产模型**（`models/lstm_v2_nonperson.pt`）。
+>
+> ⚠️ 过程中一度看到"SITTING 召回 −16.14pp"并准备判定为退化，实为**训练脚本无随机种子**
+> 导致的噪声（同种子对比仅 +0.40pp）。详见下方"踩过的坑"第 3 条。
+
 ### 现象
 
 用户采集了 13 段真实场景素材（白天 4 + 夜间 9，合计 6.8 分钟）。
@@ -56,7 +63,7 @@
 | `scripts/build/build_dataset_nonperson.py` | 新增。读 `dataset/nonperson_index.csv`，**只取 `has_person=no` + `no_person_verified=yes` + `camera=fixed`**（红线在代码里硬性执行）→ 复用 `extract_video`/`build_window_features` 保持与 Le2i 同口径 → 30 帧窗/stride 3 → 全标 `NON_PERSON(3)`，`risk=0.0`/`time=999`（与 SAFE 一致，因而自动被 `valid_time=(risk>0)&(time<1.0)` 排除在 time 损失外） |
 | 同上 | 只保留"窗口内 ≥50% 帧有检出"的窗口。NON_PERSON 要教的是"检测器以为有人、其实没有"；纯零检出窗口学到的是"全零输入⇒非人"，对抑制误报无用。实测该过滤 0 丢弃——夜间素材**每帧都检出**（检出帧占比 1.000） |
 | 同上 | `scene_id=20`，刻意不进任何折的测试集：9 段同属一个场景，拆进测试集等于同场景泄露 |
-| `scripts/build/merge_nonperson_v2.py` | 新增。把分片并入 v2 数据集，输出 `x_v2_np.npy` 等；写入前**校验 scene_id 不重叠**（否则会打乱 LOSO 折组） |
+| `scripts/build/merge_nonperson_v2.py` | 新增。把分片并入 v2 数据集，输出 `x_v2_nonperson.npy` 等；写入前**校验 scene_id 不重叠**（否则会打乱 LOSO 折组） |
 | `scripts/train/train_v2.py` | 加 `--suffix`（数据+产物）、`--out-suffix`（仅产物，用于"用生产数据训练但另存"）、`--seed`。**三个参数默认值都保持原行为**，是为了让 A/B 不覆盖生产模型 |
 | `scripts/eval/eval_pipeline_regress.py` | 新增。端到端回归 harness：跑真实的 `realtime_detect.main()`（monkeypatch 截获状态），`--suffix` 切换模型做 A/B |
 | `scripts/eval/eval_nonperson_effect.py` | 新增。在**未参与训练**的误检素材上直接测模型判 NON_PERSON 的比例 |
@@ -133,8 +140,12 @@ SITTING 召回看着掉了 16.14pp，但**基线自己两次跑的跨度就有 1
 - `scripts/eval/verify_real_videos.py` 已过期：它引用 `lstm_5class.pt` / `lstm_4class.pt` /
   `lstm_multitask.pt` 这些**不存在的模型**并静默回退，且用旧的 `LSTMClassifier`。
   已被 `scripts/eval/eval_pipeline_regress.py` 取代，本次未删除。
-- **生产模型未替换。** `_np` 系列产物（`models/lstm_v2_np.pt` 等）已生成但未启用；
-  原生产模型备份在 `models/backup_pre_nonperson/`（md5 已核对）。是否切换由使用方决定。
+- ~~生产模型未替换~~ **已于 2026-10-15 切换**：`realtime_detect.py` 改为加载
+  `lstm_v2_nonperson.pt` / `norm_v2_nonperson.npz` / `temperature_v2_nonperson.npz`，
+  同步更新了 `README.md`、`docs/architecture.md`、`scripts/eval/analyze_risk_buckets.py`
+  里的文件名引用。切换前用这些文件名重新跑了一遍端到端回归，
+  与 `_np` 那次**逐行完全一致**，确认改的只是文件名、模型行为未变。
+  切换前的旧模型备份在 `models/backup_pre_nonperson/`（md5 已核对）。
 
 ---
 
@@ -760,9 +771,9 @@ score 0.79），唯一干净的判据是检测置信度——但那等于把 `co
 ```bash
 # 1. 端到端回归（在单进程内驱动真实的 realtime_detect.main()）
 #    输出：每段的 首WARNING / 首DANGER / DANGER 占比 + 正常段是否守住 0 报警
-#    --suffix 切换模型做 A/B（空=生产模型）；Le2i 归档需已挂载 /Volumes/media-backup
+#    --suffix 切换模型做 A/B（默认 _nonperson=当前生产模型）；Le2i 归档需已挂载 /Volumes/media-backup
 python scripts/eval/eval_pipeline_regress.py
-python scripts/eval/eval_pipeline_regress.py --suffix _np --which real
+python scripts/eval/eval_pipeline_regress.py --which real        # 默认即当前生产模型
 
 # 2. 逐帧跟踪诊断（新建 ID 次数、僵尸轨道、丢失段）
 #    需要统计 person_falldown-3.mp4 的 990 帧
@@ -776,15 +787,15 @@ python scripts/eval/sweep_detection_gate.py --list-fp
 
 # 5. NON_PERSON 生效检查（在未参与训练的误检素材上看类别输出）
 #    生产 / 重训基线都是 0.0%，加入分片的模型 68.9%
-python scripts/eval/eval_nonperson_effect.py --suffixes "",_baseline,_np
+python scripts/eval/eval_nonperson_effect.py --suffixes "",_baseline,_nonperson
 
 # 6. 重建 NON_PERSON 分片并并入 v2 数据集（幂等，可反复跑）
 python scripts/build/build_dataset_nonperson.py            # 抽点有缓存，--force 可强制重抽
-python scripts/build/merge_nonperson_v2.py                 # 产出 x_v2_np.npy 等
+python scripts/build/merge_nonperson_v2.py                 # 产出 x_v2_nonperson.npy 等
 
 # 7. 重训（务必用 --out-suffix 或 --suffix，避免覆盖生产模型；对比实验必须带 --seed）
 python scripts/train/train_v2.py --suffix ""      --out-suffix _baseline --seed 1
-python scripts/train/train_v2.py --suffix _np     --out-suffix _np         --seed 1
+python scripts/train/train_v2.py --suffix _nonperson --out-suffix _nonperson --seed 1
 
 # 8. Home_01 video(10) 的沙发误报 A/B（复现"朴素下调 0.20 被拦下"的证据）
 #    单独跑该视频，观察首次 DANGER 帧：

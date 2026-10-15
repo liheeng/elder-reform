@@ -14,7 +14,9 @@ eval_pipeline_regress.py
     monkeypatch realtime_detect 的模型路径常量与屏幕输出，跑完所有视频，
     避免为每个视频重复加载模型。
 
-基准值（lstm_v2.pt，改动前）:
+基准值:
+    `--suffix ""`（切换前的 lstm_v2.pt）与 `--suffix _nonperson`（当前生产模型）
+    的数字见 docs/tuning-log.md 的 NON_PERSON 条目。
     正常 7 段：WARNING / DANGER 全为 0
     跌倒 6 段：见 docs/tuning-log.md 记录的首 DANGER 帧
     真实 6 段：见 docs/tuning-log.md
@@ -116,8 +118,9 @@ def run_one(rd, tag, path):
 
 def main():
     ap = argparse.ArgumentParser(description="端到端回归：真实 realtime_detect 主循环")
-    ap.add_argument("--suffix", default="",
-                    help="模型文件名后缀，如 _np / _baseline；默认空=生产模型")
+    ap.add_argument("--suffix", default="_nonperson",
+                    help="模型文件名后缀；默认 _nonperson=当前生产模型，"
+                         "空串=2026-10-15 切换前的旧模型，_baseline=重训基线")
     ap.add_argument("--which", default="all", choices=["all", "normal", "fall", "real"])
     args = ap.parse_args()
 

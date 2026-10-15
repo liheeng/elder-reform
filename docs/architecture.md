@@ -58,7 +58,7 @@ flowchart TD
         BLD["build_dataset_v2.py<br/>滑窗切分 + 6 条标签规则"]
         NPY["processed/*.npy<br/>x_v2 / class_labels_v2<br/>risk_labels_v2 / time_labels_v2"]
         TRN["train_v2.py<br/>MultiTaskLoss + 3-fold LOSO"]
-        W["models/lstm_v2.pt<br/>norm_v2.npz<br/>temperature_v2.npz"]
+        W["models/lstm_v2_nonperson.pt<br/>norm_v2_nonperson.npz<br/>temperature_v2_nonperson.npz"]
         V --> ANNO --> BLD
         V --> Y0 --> KPC --> BLD
         BLD --> NPY --> TRN --> W
@@ -255,7 +255,7 @@ com = (lhip + rhip + lsho + rsho) / 4
 原始 64 维各维**尺度差异极大**：`conf` 在 `0~1`、坐标在 `±100`、角度在 `0~180`。
 因此 `LSTMClassifierV2.normalize()` 会先用训练集统计的 `mean/std` 逐维标准化，再送进 LSTM。
 
-> 这也是 `models/norm_v2.npz` 不可或缺的原因 —— 缺了它模型无法正确推理。
+> 这也是 `models/norm_v2_nonperson.npz` 不可或缺的原因 —— 缺了它模型无法正确推理。
 
 ### 3.3 四个易踩的坑
 
@@ -396,7 +396,7 @@ pooled = 0.5 * out[:, -1, :] + 0.5 * out.mean(dim=1)
 
 | 缺失项 | 影响 |
 |---|---|
-| `models/` 整个目录 | 无 `yolo26n-pose.pt`、`lstm_v2.pt`、`norm_v2.npz`、`temperature_v2.npz` |
+| `models/` 整个目录 | 无 `yolo26n-pose.pt`、`lstm_v2_nonperson.pt`、`norm_v2_nonperson.npz`、`temperature_v2_nonperson.npz` |
 | `yolo_keypoints/` 目录 | 无预提取关键点缓存，需用 `scripts/build/extract_keypoints.py` 重新抽点 |
 | `processed/*.npy` | 仅有 3 个 json meta，无 `x_v2.npy` 等训练数据 |
 | Le2i 原始视频与标注 | 不含于仓库，需从 [Kaggle: falldataset-imvia](https://www.kaggle.com/datasets/tuyenldvn/falldataset-imvia) 获取（190 个 `.avi` + 130 份标注，约 16 GB），并按 `build_dataset_v2.py` 的 `ARCHIVE` 结构摆放 |
@@ -542,7 +542,7 @@ PREVFALL_DIR = r"/Volumes/media-backup/AI-data/dataset/falldown/Pre-VFall"   # �
 - 前置：修改 `ARCHIVE` 硬编码路径；确保 Le2i 数据集（[Kaggle: falldataset-imvia](https://www.kaggle.com/datasets/tuyenldvn/falldataset-imvia)）与 `yolo_keypoints/` 缓存就位
 - 练习：跑通训练，看 confusion matrix，调 `class_weights` 观察 FALLEN 召回敏感度
 
-**验收**：能从 `x_v2.npy` 一路追到 `temperature_v2.npz` 的生成过程
+**验收**：能从 `x_v2.npy` 一路追到 `temperature_v2_nonperson.npz` 的生成过程
 
 ### 阶段 6 · 系统集成改造（持续）
 
@@ -1001,7 +1001,7 @@ torso_angle = degrees(arctan2(|dx|, |dy|))
 
 #### 改动前必须知道的风险
 
-1. **破坏维度契约**：`64 → 65+` 后 `models/norm_v2.npz` 的 `mean` / `std` 形状不匹配，
+1. **破坏维度契约**：`64 → 65+` 后 `models/norm_v2_nonperson.npz` 的 `mean` / `std` 形状不匹配，
    必须重训模型并重新生成归一化参数
 2. **静默错位**：`build_dataset_v2.py` 的 `is_sitting_posture_v2` 直接硬编码读取
    `feat[52] / feat[53] / feat[54] / feat[61] / feat[62]`。任何插维/删维都必须同步修改它，
@@ -1080,7 +1080,7 @@ acc[:, CONF_IDX] = 0
 
 | | 置零 | 真删维（`192 → 158`） |
 |---|---|---|
-| shape 不变 | ✅ 仍为 `192` | ❌ 需重新生成 `norm_v2.npz` |
+| shape 不变 | ✅ 仍为 `192` | ❌ 需重新生成 `norm_v2_nonperson.npz` |
 | 影响 `is_sitting_posture_v2` 的硬编码索引 | ✅ 无（`pos` 索引未变） | ❌ 必须同步修改（§9.2） |
 | 变量是否单一 | ✅ 只改信息量，容量不变，消融干净 | ❌ 同时改了容量，混淆因素 |
 | NaN 风险 | ✅ 训练集上恒为 0 → `mean=0, std=0` → `(0-0)/1e-8 = 0` | — |
@@ -1135,7 +1135,7 @@ out = (x - mean) / std
    safe_std = np.where(raw_std < 1e-6, 1.0, raw_std)
    ```
    这样常量维度标准化后恒为 `0`，而非被放大
-3. 注意改动会改变已有 `norm_v2.npz` 的语义，需重训或重新标定
+3. 注意改动会改变已有 `norm_v2_nonperson.npz` 的语义，需重训或重新标定
 
 ---
 

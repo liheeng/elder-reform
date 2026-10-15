@@ -18,7 +18,7 @@ eval_nonperson_effect.py
 
 用法:
     python scripts/eval/eval_nonperson_effect.py
-    python scripts/eval/eval_nonperson_effect.py --suffixes "",_baseline,_np
+    python scripts/eval/eval_nonperson_effect.py --suffixes "",_baseline,_nonperson
 """
 
 import argparse
@@ -72,7 +72,7 @@ def resolve_model_paths(suffix):
 
 def main():
     ap = argparse.ArgumentParser(description="测量 NON_PERSON 判定的实际生效情况")
-    ap.add_argument("--suffixes", default=",_baseline,_np",
+    ap.add_argument("--suffixes", default=",_baseline,_nonperson",
                     help="逗号分隔的模型后缀（空串=生产模型）")
     ap.add_argument("--camera", default="handheld",
                     help="从登记表取哪类机位的片段（默认 handheld=未参与训练的那批）")

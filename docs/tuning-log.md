@@ -119,9 +119,8 @@ stair2 明确支持、stair1 明确反对、pd4 两个种子自相差 104 帧，
 4. **顺带发现一个此前未注意的训练/推理不一致**：`x_v2.npy` 构建于 **10-14 08:51**，
    而 `conf 0.05→0.02` 那次提交在 **10-14 22:19** —— 晚 14 小时。也就是说
    **当前生产模型是在 conf=0.05 抽的关键点上训练的，而推理一直用 conf=0.02**。
-   本轮重抽顺带修好了它（新数据集与推理抽取配置一致）。
-   对比两臂与生产可见：不带 score 时真实组首 DANGER 从 125.7 退化到 149.9 ——
-   这次"对齐"本身可能带来真实段退化，需要单独复查。
+   本轮重抽顺带修好了它。这个对齐本身的影响**单独做了 A/B**，
+   见本条目末尾附录：聚合无显著退化，但 `FALL Lecture 1` 与 `REAL pd2` 两处干净退化。
 
 ### 遗留
 
@@ -129,10 +128,42 @@ stair2 明确支持、stair1 明确反对、pd4 两个种子自相差 104 帧，
   （正常 7 段实测仍全 0），无需回滚。
 - **`train_v2.py` 默认已改为"关闭 score 通道"**（开关改名 `--score-channel`，默认 off），
   以免下一个人默认训出更差的模型；数据集里仍保留这一路，供复现。
-- 权重/归一化器未删，A/B 双方都留着：`models/lstm_v2_{noscore,score}_s{1,2}.*`。
-- 上述第 4 点（conf 对齐后真实段是否退化）需要至少 3 个种子才能定性，未排期。
+- 权重/归一化器未删，A/B 双方都留着：`models/lstm_v2_{olddata,noscore,score}_s{1,2}.*`。
 - 采集侧遗留未变：仍缺"快走/小跑"正常素材与**有人对照**；held-out 只有 4 段白天手持
   素材、1 种场景，非人判定率的置信区间很宽。
+
+---
+
+### 附：抽取配置对齐（`conf` 0.05→0.02）的独立 A/B
+
+第 4 条坑里那句"真实段从 125.7 退化到 149.9"是**单模型 vs 两模型的误比**，不成立。
+补了**旧数据臂**（2 种子，其余全同）之后才看清。两臂只差 Le2i 段 ——
+非人分片已验证与 10-15 那份**逐位一致**（只差 score 六维）。
+
+| 指标 | 旧数据（`conf` 0.05） | 新数据（`conf` 0.02） | 差 |
+|---|---|---|---|
+| 正常 Le2i 7 段 | 全 0 ✅ | 全 0 ✅ | — |
+| 跌倒 5 段首DANGER 均值 | 167.2 / 173.2 → **170.2** | 181.4 / 179.8 → **180.6** | +10.4 |
+| 真实 6 段首DANGER 均值 | 120.7 / 150.7 → **135.7** | 154.0 / 145.8 → **149.9** | +14.2（**两臂重叠**） |
+| held-out 非人判定率 | 64.3 / 66.7 → **65.5** | 67.9 / 65.6 → **66.8** | +1.3（噪声内） |
+
+**聚合看只有轻微、不显著的退化，但逐视频有两处干净的效应：**
+
+| 视频 | 旧数据 s1 / s2 | 新数据 s1 / s2 | 差距 |
+|---|---|---|---|
+| `FALL Lecture 1` | 131 / 149 | **195 / 192** | **晚约 50 帧** |
+| `REAL pd2` | 163 / 152 | **290 / 291** | **晚约 135 帧** |
+
+两处都是**两臂无重叠**。其余视频（pd1/pd4/stair1/stair2）的臂间差异都落在种子噪声里
+（例如 pd4 旧臂自己就 152↔256，跨度 104 帧）。
+
+**并且 `score` 通道恰好修好了 `pd2`**（290/291 → 150/143）—— 这正是 score 臂真实组
+均值看起来更好的**唯一**来源。所以 score 与"抽取配置对齐"这两件事是耦合的：
+对齐本身打断了 pd2 与 Lecture 1，而 score 只补回了 pd2。
+
+**结论**：抽取配置对齐**值得做**（它修掉了训练/推理不一致，且非人判定率与正常段都没坏），
+但必须接受 `FALL Lecture 1` 与 `REAL pd2` 的退化，或去查清这两个视频在 `conf=0.02`
+下到底多了什么候选框。**在有结论之前，生产模型维持现状不动。**
 
 ---
 
@@ -1243,7 +1274,21 @@ python scripts/eval/eval_nonperson_effect.py \
 for s in _nonperson _noscore_s1 _noscore_s2 _score_s1 _score_s2; do
   python scripts/eval/eval_pipeline_regress.py --suffix $s
 done
+#    9d. 抽取配置对齐（conf 0.05→0.02）的独立 A/B
+#        旧数据集 = 那批 conf=0.05 抽的缓存产物，只存在于 processed/_baseline_noscore/
+#        （非人分片已验证与 10-15 那份逐位一致，故两臂只差 Le2i 段）
+cd processed && for f in x_v2 class_labels_v2 risk_labels_v2 time_labels_v2 video_ids_v2; do
+  ln -sf "_baseline_noscore/${f}_nonperson.npy" "${f}_olddata.npy"; done; cd ..
+for s in 1 2; do
+  python scripts/train/train_v2.py --suffix _olddata --seed $s --out-suffix "_olddata_s${s}"
+  python scripts/eval/eval_pipeline_regress.py --suffix "_olddata_s${s}"
+done
+python scripts/eval/eval_nonperson_effect.py \
+       --suffixes "_nonperson,_olddata_s1,_olddata_s2,_noscore_s1,_noscore_s2,_score_s1,_score_s2"
 ```
+
+> **结果务必逐视频看，不要只看均值。** 3.4 节第 21 条：抽取配置对齐的聚合差异落在重叠区，
+> 但 `FALL Lecture 1`（+50 帧）与 `REAL pd2`（+135 帧）两处是两臂无重叠的干净退化。
 
 > **⚠️ 动手前必读**：改动 `score` 通道后，**任何"把某一维置零"的消融都必须同时处理它
 > 在 `norm` 里的方差**（见 2026-10-16 条目的「踩过的坑」第 1 条），并让**所有**喂模型的

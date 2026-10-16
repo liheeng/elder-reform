@@ -18,8 +18,11 @@ train_v2.py
 
 import os
 import argparse
+import json
 import sys
 import numpy as np
+from pathlib import Path
+
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
@@ -122,8 +125,9 @@ class FallDatasetV2(Dataset):
 # ==================================================
 # Train One Fold
 # ==================================================
-def train_fold(train_loader, val_loader, class_weights, fold_id, encoder="lstm"):
-    model = RiskClassifierV2(encoder=encoder).to(DEVICE)
+def train_fold(train_loader, val_loader, class_weights, fold_id, encoder="lstm",
+               pooling="lastmean"):
+    model = RiskClassifierV2(encoder=encoder, pooling=pooling).to(DEVICE)
     optimizer = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="min", factor=0.5, patience=5, min_lr=1e-6,
@@ -228,6 +232,9 @@ def main():
                          "用于「用生产数据训练但写到别的文件名」，避免覆盖生产模型")
     ap.add_argument("--encoder", default="lstm", choices=["lstm", "tcn"],
                     help="时序编码器；用于受控消融，默认 lstm 保持原行为")
+    ap.add_argument("--pooling", default="lastmean",
+                    choices=["lastmean", "last", "mean", "max", "attn"],
+                    help="时序池化；默认 lastmean 保持原行为")
     ap.add_argument("--seed", type=int, default=None,
                     help="随机种子；默认 None=不固定（保持既有行为）。"
                          "对比实验请显式指定，否则跑两次结果有差异")
@@ -244,7 +251,7 @@ def main():
     print("=" * 60)
     print("V2 4-Class + Risk Training with 3-fold LOSO CV")
     print("=" * 60)
-    print(f"时序编码器: {args.encoder}")
+    print(f"时序编码器: {args.encoder}   池化: {args.pooling}")
     if sfx:
         print(f"文件名后缀: {sfx}")
 
@@ -317,7 +324,7 @@ def main():
                                  pin_memory=True)
 
         model = train_fold(train_loader, test_loader, weights_tensor, fold_idx + 1,
-                           encoder=args.encoder)
+                           encoder=args.encoder, pooling=args.pooling)
 
         model.eval()
         with torch.no_grad():
@@ -405,7 +412,7 @@ def main():
     full_loader = DataLoader(full_dataset, batch_size=BATCH_SIZE, shuffle=True,
                              pin_memory=True)
 
-    model = RiskClassifierV2(encoder=args.encoder).to(DEVICE)
+    model = RiskClassifierV2(encoder=args.encoder, pooling=args.pooling).to(DEVICE)
     optimizer = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="min", factor=0.5, patience=5, min_lr=1e-6,
@@ -459,6 +466,14 @@ def main():
     model.load_state_dict(best_state)
     final_path = os.path.join(MODEL_DIR, f"lstm_v2{out_sfx}.pt")
     torch.save(model.state_dict(), final_path)
+    # 权重自描述：non-attn 的各种池化权重键名完全相同，缺了这份 meta
+    # 评估侧会静默套用错误的池化方式，结果错但不报错。
+    meta_path = Path(final_path).with_suffix(".meta.json")
+    with open(meta_path, "w", encoding="utf-8") as fh:
+        json.dump({"encoder": args.encoder, "pooling": args.pooling,
+                   "seed": args.seed, "data_suffix": sfx,
+                   "out_suffix": out_sfx}, fh, ensure_ascii=False, indent=2)
+    print(f"  元信息 -> {meta_path}")
     print(f"\nFinal model saved -> {final_path}")
     print("\nDone.")
 

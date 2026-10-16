@@ -1,5 +1,8 @@
+import json
 import os
 import numpy as np
+from pathlib import Path
+
 import torch
 from classifier.risk_classifier_v2 import RiskClassifierV2
 from utils.device import resolve_device
@@ -9,14 +12,27 @@ PRE_FALL = 120  # 和 build_dataset_v2.py 保持一致
 
 class LSTMClassifierV2:
     def __init__(self, model_path, norm_path, temperature_path=None, device=None,
-                 encoder=None):
+                 encoder=None, pooling=None):
         self.device = resolve_device(device) if device else resolve_device("auto")
         state = torch.load(model_path, map_location=self.device)
-        # 权重自描述：按时序编码器的键前缀判断，老权重（lstm.*）行为完全不变
+        # 权重自描述：训练时写的 sidecar meta 优先，缺失时按 state_dict 键推断。
+        # 之所以必须有 meta —— encoder="lstm" 且 pooling 非 attn 时，各变体的键名
+        # 完全相同，只靠键是分不出用的是哪种池化的，会静默套错。
+        meta = {}
+        meta_path = Path(model_path).with_suffix(".meta.json")
+        if meta_path.exists():
+            with open(meta_path, encoding="utf-8") as fh:
+                meta = json.load(fh)
         if encoder is None:
-            encoder = "tcn" if any(k.startswith("tcn.") for k in state) else "lstm"
+            encoder = meta.get("encoder") or (
+                "tcn" if any(k.startswith("tcn.") for k in state) else "lstm")
+        if pooling is None:
+            pooling = meta.get("pooling") or (
+                "attn" if any(k.startswith("attn.") for k in state) else "lastmean")
         self.encoder = encoder
-        self.model = RiskClassifierV2(input_dim=192, num_classes=4, encoder=encoder)
+        self.pooling = pooling
+        self.model = RiskClassifierV2(input_dim=192, num_classes=4,
+                                      encoder=encoder, pooling=pooling)
         self.model.load_state_dict(state)
         self.model.to(self.device)
         self.model.eval()
@@ -28,7 +44,8 @@ class LSTMClassifierV2:
         self.temperature = 1.0
         if temperature_path and os.path.exists(temperature_path):
             self.temperature = float(np.load(temperature_path)["T"])
-        print(f"[ClassifierV2] 4-class+risk model loaded (encoder={self.encoder}, T={self.temperature:.3f})")
+        print(f"[ClassifierV2] 4-class+risk model loaded "
+              f"(encoder={self.encoder}, pooling={self.pooling}, T={self.temperature:.3f})")
 
     def normalize(self, sequence):
         return (sequence - self.mean.cpu().numpy()) / self.std.cpu().numpy()

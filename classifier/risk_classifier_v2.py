@@ -39,9 +39,28 @@ class TCNEncoder(nn.Module):
         return h.transpose(1, 2)
 
 
+# 池化方式；lastmean 是既有生产行为，其余为消融候选
+POOLINGS = ("lastmean", "last", "mean", "max", "attn")
+
+class AttentionPool(nn.Module):
+    """按时间步学习权重再加权求和，用来对比固定池化。
+
+    只多出 hidden_dim+1 个参数，因此与其它池化变体的容量几乎相同 ——
+    消融要比较的是"聚合方式"，不是参数量。
+    """
+
+    def __init__(self, hidden_dim):
+        super().__init__()
+        self.score = nn.Linear(hidden_dim, 1)
+
+    def forward(self, out):
+        weight = torch.softmax(self.score(out), dim=1)
+        return (weight * out).sum(dim=1)
+
+
 class RiskClassifierV2(nn.Module):
     def __init__(self, input_dim=192, hidden_dim=128, num_layers=None,
-                 dropout=0.3, num_classes=4, encoder="lstm"):
+                 dropout=0.3, num_classes=4, encoder="lstm", pooling="lastmean"):
         super().__init__()
         # num_layers 按编码器取各自默认：LSTM 2 层，TCN 4 层（感受野需覆盖 30 帧）
         if num_layers is None:
@@ -64,6 +83,13 @@ class RiskClassifierV2(nn.Module):
             )
         else:
             raise ValueError(f"未知 encoder: {encoder!r}（可选 lstm / tcn）")
+
+        # 池化：所有变体的输出维度都保持 hidden_dim，保证头部的参数量一致
+        if pooling not in POOLINGS:
+            raise ValueError(f"未知 pooling: {pooling!r}（可选 {', '.join(POOLINGS)}）")
+        self.pooling = pooling
+        if pooling == "attn":
+            self.attn = AttentionPool(hidden_dim)
         # 分类头：128 → 64 → 4
         self.class_proj = nn.Sequential(
             nn.Linear(hidden_dim, 64),
@@ -99,7 +125,16 @@ class RiskClassifierV2(nn.Module):
             out, _ = self.lstm(x)
         else:
             out = self.tcn(x)
-        pooled = 0.5 * out[:, -1, :] + 0.5 * out.mean(dim=1)
+        if self.pooling == "lastmean":       # 既有生产行为：末帧与均值各半
+            pooled = 0.5 * out[:, -1, :] + 0.5 * out.mean(dim=1)
+        elif self.pooling == "last":
+            pooled = out[:, -1, :]
+        elif self.pooling == "mean":
+            pooled = out.mean(dim=1)
+        elif self.pooling == "max":
+            pooled = out.max(dim=1).values
+        else:                                # attn
+            pooled = self.attn(out)
         class_logits = self.classifier(self.class_proj(pooled))
         risk = self.risk_head(self.risk_proj(pooled))
         time_pred = self.time_head(self.time_proj(pooled))

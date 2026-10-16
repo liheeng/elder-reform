@@ -8,10 +8,16 @@ CLASS_NAMES = ["SAFE", "FALLEN", "SITTING", "NON_PERSON"]
 PRE_FALL = 120  # 和 build_dataset_v2.py 保持一致
 
 class LSTMClassifierV2:
-    def __init__(self, model_path, norm_path, temperature_path=None, device=None):
+    def __init__(self, model_path, norm_path, temperature_path=None, device=None,
+                 encoder=None):
         self.device = resolve_device(device) if device else resolve_device("auto")
-        self.model = RiskClassifierV2(input_dim=192, num_classes=4)
-        self.model.load_state_dict(torch.load(model_path, map_location=self.device))
+        state = torch.load(model_path, map_location=self.device)
+        # 权重自描述：按时序编码器的键前缀判断，老权重（lstm.*）行为完全不变
+        if encoder is None:
+            encoder = "tcn" if any(k.startswith("tcn.") for k in state) else "lstm"
+        self.encoder = encoder
+        self.model = RiskClassifierV2(input_dim=192, num_classes=4, encoder=encoder)
+        self.model.load_state_dict(state)
         self.model.to(self.device)
         self.model.eval()
 
@@ -22,7 +28,7 @@ class LSTMClassifierV2:
         self.temperature = 1.0
         if temperature_path and os.path.exists(temperature_path):
             self.temperature = float(np.load(temperature_path)["T"])
-        print(f"[ClassifierV2] 4-class+risk model loaded (T={self.temperature:.3f})")
+        print(f"[ClassifierV2] 4-class+risk model loaded (encoder={self.encoder}, T={self.temperature:.3f})")
 
     def normalize(self, sequence):
         return (sequence - self.mean.cpu().numpy()) / self.std.cpu().numpy()

@@ -122,8 +122,8 @@ class FallDatasetV2(Dataset):
 # ==================================================
 # Train One Fold
 # ==================================================
-def train_fold(train_loader, val_loader, class_weights, fold_id):
-    model = RiskClassifierV2().to(DEVICE)
+def train_fold(train_loader, val_loader, class_weights, fold_id, encoder="lstm"):
+    model = RiskClassifierV2(encoder=encoder).to(DEVICE)
     optimizer = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="min", factor=0.5, patience=5, min_lr=1e-6,
@@ -226,6 +226,8 @@ def main():
     ap.add_argument("--out-suffix", default=None,
                     help="仅产物后缀；默认与 --suffix 一致。"
                          "用于「用生产数据训练但写到别的文件名」，避免覆盖生产模型")
+    ap.add_argument("--encoder", default="lstm", choices=["lstm", "tcn"],
+                    help="时序编码器；用于受控消融，默认 lstm 保持原行为")
     ap.add_argument("--seed", type=int, default=None,
                     help="随机种子；默认 None=不固定（保持既有行为）。"
                          "对比实验请显式指定，否则跑两次结果有差异")
@@ -242,6 +244,7 @@ def main():
     print("=" * 60)
     print("V2 4-Class + Risk Training with 3-fold LOSO CV")
     print("=" * 60)
+    print(f"时序编码器: {args.encoder}")
     if sfx:
         print(f"文件名后缀: {sfx}")
 
@@ -313,7 +316,8 @@ def main():
         test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False,
                                  pin_memory=True)
 
-        model = train_fold(train_loader, test_loader, weights_tensor, fold_idx + 1)
+        model = train_fold(train_loader, test_loader, weights_tensor, fold_idx + 1,
+                           encoder=args.encoder)
 
         model.eval()
         with torch.no_grad():
@@ -401,7 +405,7 @@ def main():
     full_loader = DataLoader(full_dataset, batch_size=BATCH_SIZE, shuffle=True,
                              pin_memory=True)
 
-    model = RiskClassifierV2().to(DEVICE)
+    model = RiskClassifierV2(encoder=args.encoder).to(DEVICE)
     optimizer = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="min", factor=0.5, patience=5, min_lr=1e-6,

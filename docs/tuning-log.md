@@ -138,7 +138,7 @@ stair2 明确支持、stair1 明确反对、pd4 两个种子自相差 104 帧，
 
 第 4 条坑里那句"真实段从 125.7 退化到 149.9"是**单模型 vs 两模型的误比**，不成立。
 补了**旧数据臂**（2 种子，其余全同）之后才看清。两臂只差 Le2i 段 ——
-非人分片已验证与 10-15 那份**逐位一致**（只差 score 六维）。
+非人分片已验证：与 10-15 那份**除 score 六维外逐位一致**（关键点与几何完全相同）。
 
 | 指标 | 旧数据（`conf` 0.05） | 新数据（`conf` 0.02） | 差 |
 |---|---|---|---|
@@ -1276,7 +1276,7 @@ for s in _nonperson _noscore_s1 _noscore_s2 _score_s1 _score_s2; do
 done
 #    9d. 抽取配置对齐（conf 0.05→0.02）的独立 A/B
 #        旧数据集 = 那批 conf=0.05 抽的缓存产物，只存在于 processed/_baseline_noscore/
-#        （非人分片已验证与 10-15 那份逐位一致，故两臂只差 Le2i 段）
+#        （非人分片已验证：与 10-15 那份除 score 六维外逐位一致，故两臂只差 Le2i 段）
 cd processed && for f in x_v2 class_labels_v2 risk_labels_v2 time_labels_v2 video_ids_v2; do
   ln -sf "_baseline_noscore/${f}_nonperson.npy" "${f}_olddata.npy"; done; cd ..
 for s in 1 2; do

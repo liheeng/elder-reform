@@ -32,7 +32,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from classifier.lstm_classifier_v2 import CLASS_NAMES, LSTMClassifierV2  # noqa: E402
-from features.feature_builder_v2 import interpolate_missing_frames  # noqa: E402
+from features.feature_builder_v2 import interpolate_missing_frames, score_channel_window_dims  # noqa: E402
 from pose.pose_extractor import PoseExtractor  # noqa: E402
 from scripts.build.build_dataset_nonperson import (  # noqa: E402
     INDEX_CSV,
@@ -46,19 +46,32 @@ MODEL_DIR = PROJECT_ROOT / "models"
 
 
 def build_windows(video_path, extractor, min_det_ratio):
-    """返回 (windows (N,30,192), 检出帧占比) 或 (None, None)。"""
-    kpts, confs = load_or_extract(video_path, extractor, force=False, log_every=500)
+    """返回 ((带 score 窗口, 不带 score 窗口), 检出帧占比) 或 (None, None)。
+
+    两套窗口都要产出：是否启用 score 那一路是**模型自己的属性**
+    （见 LSTMClassifierV2.uses_score）。在按"这两维恒为 0"拟合出来的归一化器上
+    喂入真实 score，会把 z 放大到 1e7 量级，结果全废 —— 不是模型不行。
+    """
+    kpts, confs, scores = load_or_extract(video_path, extractor, force=False, log_every=500)
     if kpts is None:
         return None, None
     det_mask = kpts.reshape(kpts.shape[0], -1).sum(axis=1) > 1.0
-    kpts, confs = interpolate_missing_frames(kpts, confs)
-    feats = build_window_features(kpts, confs)
-    windows = [feats[s:s + WINDOW_SIZE]
-               for s in range(0, feats.shape[0] - WINDOW_SIZE + 1, STRIDE)
-               if det_mask[s:s + WINDOW_SIZE].mean() >= min_det_ratio]
-    if not windows:
+    kpts, confs, scores = interpolate_missing_frames(kpts, confs, scores)
+    spans = [(s, s + WINDOW_SIZE)
+             for s in range(0, len(kpts) - WINDOW_SIZE + 1, STRIDE)
+             if det_mask[s:s + WINDOW_SIZE].mean() >= min_det_ratio]
+    if not spans:
         return None, float(det_mask.mean())
-    return np.stack(windows).astype(np.float32), float(det_mask.mean())
+
+    def stack(use_score):
+        feats = build_window_features(kpts, confs, scores if use_score else None)
+        if not use_score:
+            # 与 train_v2 默认路径（score 通道关闭）的置零口径对齐（pos/vel/acc 六维）。
+            # feats 是 (T, 192)，通道维在最后一轴。
+            feats[:, list(score_channel_window_dims())] = 0.0
+        return np.stack([feats[a:b] for a, b in spans]).astype(np.float32)
+
+    return (stack(True), stack(False)), float(det_mask.mean())
 
 
 def resolve_model_paths(suffix):
@@ -103,14 +116,14 @@ def main():
             print(f"[跳过] {video_path.name}: 无窗口")
             continue
         per_clip[video_path.name] = windows
-        print(f"  构建 {video_path.name}: {windows.shape[0]} 窗口，检出帧占比 {det_ratio:.3f}")
+        print(f"  构建 {video_path.name}: {windows[0].shape[0]} 窗口，检出帧占比 {det_ratio:.3f}")
 
     if not per_clip:
         print("没有可用窗口，退出。")
         return 1
 
-    all_windows = np.concatenate(list(per_clip.values()), axis=0)
-    print(f"\n合计 {all_windows.shape[0]} 个窗口\n")
+    n_windows = sum(p[0].shape[0] for p in per_clip.values())
+    print(f"\n合计 {n_windows} 个窗口\n")
 
     print(f"{'模型':<18}{'NON_PERSON 占比':>16}{'SITTING':>10}{'SAFE':>10}"
           f"{'FALLEN':>10}{'NON_PERSON 平均概率':>22}")
@@ -122,6 +135,9 @@ def main():
             continue
         clf = LSTMClassifierV2(str(paths[0]), str(paths[1]),
                                str(paths[2]) if paths[2] else None)
+        # 按模型自己的性质取对应的特征变体，绝不能让老归一化器吃到 score
+        arm = 0 if getattr(clf, "uses_score", False) else 1
+        all_windows = np.concatenate([p[arm] for p in per_clip.values()], axis=0)
         counts = Counter()
         prob_sum = 0.0
         for i in range(all_windows.shape[0]):

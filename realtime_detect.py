@@ -185,13 +185,26 @@ def main(video_path=None):
 
             kpts = track["keypoints"]
             kpts_conf = track["kpts_conf"]
+            bbox_score = float(track.get("score", 0.0))
+            # 三条分支，各对应一代权重：
+            #  uses_score        训练时启用了 score 通道 -> 喂真实 score + 掩码
+            #  score_dims_pinned 对照臂：训练时这两维被置零，且归一化器里
+            #                    mean=0/std=1 -> 必须喂精确 0 才对得上
+            #  都没有              老权重：这两维在它眼里是"回退帧污染"探测器，
+            #                    保持几何原值，行为与本次改动前逐位一致
+            if getattr(classifier, "uses_score", False):
+                kw = {"score": bbox_score, "has_score": 1.0}
+            elif getattr(classifier, "score_dims_pinned", False):
+                kw = {"score": 0.0, "has_score": 0.0}
+            else:
+                kw = {}
 
             # 使用 FeatureBuilderV2 构建 64 维特征
             nk, nc = normalize_keypoints(kpts, kpts_conf)
             if nk is not None:
-                feature = FeatureBuilderV2.build(nk, nc)
+                feature = FeatureBuilderV2.build(nk, nc, **kw)
             else:
-                feature = FeatureBuilderV2.build(kpts, kpts_conf)
+                feature = FeatureBuilderV2.build(kpts, kpts_conf, **kw)
             last_feature[person_id] = feature
 
             buffer.update(person_id, feature)

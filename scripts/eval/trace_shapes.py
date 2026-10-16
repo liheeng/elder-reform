@@ -64,12 +64,18 @@ GEO_ENHANCED_NAMES = [
 
 
 def dim_names():
-    """返回 64 个维度的可读名称。"""
+    """返回 64 个维度的可读名称。
+
+    51 / 57 原本是几何量 cg_y / cg_y_norm（归一化后恒为 0），现原地复用为
+    检测框 score 与其有效性掩码，见 FeatureBuilderV2.SCORE_DIM。
+    """
     names = []
     for kp in KEYPOINT_NAMES:
         names += [f"kpt.{kp}.x", f"kpt.{kp}.y", f"kpt.{kp}.conf"]
     names += [f"geo.{n}" for n in GEO_ORIGINAL_NAMES]
     names += [f"geo2.{n}" for n in GEO_ENHANCED_NAMES]
+    names[FeatureBuilderV2.SCORE_DIM] = "bbox.score"
+    names[FeatureBuilderV2.HAS_SCORE_DIM] = "bbox.has_score"
     return names
 
 

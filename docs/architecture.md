@@ -213,6 +213,10 @@ kpts_norm = (kpts - hip_center) * (100.0 / bh)
 | 原始几何 | `51..56` | 6 | `cg_y` / `torso_angle` / `left_knee_angle` / `right_knee_angle` / `foot_distance` / `body_height` |
 | 增强几何 | `57..63` | 7 | `cg_y_norm` / `foot_norm` / `com_x` / `com_y` / `left_hip_angle` / `right_hip_angle` / `torso_angle` |
 
+> **注**：`51` 与 `57` 既是几何量（归一化后恒 ≈ 0），也是**检测框 `score` 与其
+> 有效性掩码的载荷位** —— 见 §8.1.3。传了 `score` 参数时这两格被覆盖，
+> 其余 62 维不变。
+
 几何量的公式：
 
 ```python
@@ -679,6 +683,10 @@ if nk is None:            # 身高 < 5px：该帧没有有效检测
 省掉改 `norm` 形状、`RiskClassifierV2` 输入维、以及全仓文档里"192"这一串契约改动。
 代价只剩"重建数据集 + 重训"—— 这一项本来就要付（因为特征**内容**变了）。
 
+> ⚠️ **已按此实施并实测否定**（2026-10-16）：`score` 与其有效性掩码占用 `51` / `57`
+> 及其 `vel`/`acc` 对应位，`INPUT_DIM` 保持 192。但受控消融显示它会把 held-out 非人
+> 判定率拉低 7.3 个点，故 `train_v2.py` 默认**关闭**该通道。详见 §8.1.3。
+
 #### 8.1.2 命名误导与索引依赖（2026-10-16 补充）
 
 **① 「原始几何」不是「原始像素」—— 归一化发生在上一层**
@@ -743,6 +751,72 @@ right_hip_angle  = feat[62]
 **建议动手顺序**：先把这些读取改成按名字取值，再删维；
 同时把两个块名从"原始 / 增强"改成不误导的说法（如 `几何组 A（首版 6 维）` / `几何组 B（后补 7 维）`），
 否则下一个人还会被绕进去。
+
+#### 8.1.3 废维的实际复用：检测框 score 通道（2026-10-16 实施）
+
+按 §8.1.1 的推论落地，**`INPUT_DIM` 保持 192，一个下标都没动**：
+
+| 下标 | 原语义 | 现语义 | 常量定义 |
+|---|---|---|---|
+| `51` | `geo.cg_y`（归一化后恒 ≈ 0） | **检测框 `score`** | `FeatureBuilderV2.SCORE_DIM` |
+| `57` | `geo2.cg_y_norm`（恒 ≈ 0） | **score 有效标志**（0/1） | `FeatureBuilderV2.HAS_SCORE_DIM` |
+
+**为什么必须带一个掩码维**：PV（Pre-VFall，OpenPose JSON）**根本没有检测框**，
+占数据 20%、占风险头 `risk>0` 监督的 23.6%。若只把它的 `score` 填 0 而不加掩码，
+模型会把这 20% 真人数据读成"框分极低"而推向 `NON_PERSON`，反噬风险头。
+掩码位让模型能区分"这一路的 0 是缺信号"与"框分真的很低"。
+
+**改动落点**（训练与推理必须同时改，否则特征错位）：
+
+| 文件 | 改动 |
+|---|---|
+| `features/feature_builder_v2.py` | `build(kpts, confs, score=None, has_score=None)`；新增 `SCORE_DIM` / `HAS_SCORE_DIM`；`interpolate_missing_frames` 支持第三个数组（抽出 `_fill_neighbors`，逐位等价） |
+| `scripts/build/extract_keypoints.py` | 缓存增加 `*_scores.npy`（`(T,)`，漏检帧写 0，与关键点零填充约定一致） |
+| `scripts/build/build_dataset_v2.py` | `build_window_features` / `subsample_to_10fps` 透传 score；`load_scores()` **缺失即报错**（不做静默回退，见下） |
+| `scripts/build/build_prevfall_dataset.py` | PV 显式传 `score=0.0, has_score=0.0` |
+| `realtime_detect.py` | 传 `track["score"]`，**但以模型的 `uses_score` / `score_dims_pinned` 为开关**（三分支，见下） |
+| `scripts/train/train_v2.py` | `--score-channel`（默认 **off**）；写 `uses_score` / `score_dims_pinned` 进 sidecar meta；启动时校验掩码维是 0/1 |
+| `classifier/lstm_classifier_v2.py` | 暴露 `self.uses_score` / `self.score_dims_pinned`（缺 meta 的老权重一律 `False`） |
+
+**score 在漏检帧上按 `confs` 同样插值**，而不是留 0：漏检帧的几何量已被
+`interpolate_missing_frames` 伪造，若 `score` 在此骤降为 0，会造出一串
+"有人却有高分、突然掉到 0"的人造尖峰，模型会去拟合这个采样瑕疵。
+真正的"该帧是漏检"由 `confs` 已下压的数值表达。
+
+**⚠️ 为什么 score 通道必须由模型自己的 meta 门控**
+
+老权重是在"这两维恒为 0"的数据上拟合 `norm` 的。推理侧若无条件喂入 `score`，
+就是在训练/推理之间制造不一致。实测这**不会**炸成离群值（旧 `norm` 里
+`std[51]`=14.068，`score=0.86` 只造成 z≈0.044 的偏移 —— 那个 std 全靠 §8.1.1
+那 0.03% 的回退帧撑起来），但一个准常量维被系统性地推离 0 仍是错的。
+`uses_score` 门控让**同一个 `realtime_detect.py` 能同时正确服务新旧两代权重**，
+A/B 回归也因此在同一套 harness 里自动成立。
+
+**⚠️ 数据集不做"有 / 无 score"两版**
+
+`load_scores()` 在缺少 `*_scores.npy` 时**直接报错**，不静默回退。
+因为"一半片段有 score、一半没有"会让 `HAS_SCORE_DIM` 退化成**与场景强相关的伪特征**，
+比整份数据集都没有这一路信号更糟。受控对照改用 `train_v2.py --score-channel`
+（默认**关闭**：在同一份数据上把 6 维置零并钉住 `norm`），从而**两臂的数据完全相同，
+只差 score 通道**。
+
+**⚠️ 实测结论：不采纳（2026-10-16）**
+
+受控消融（同一份数据，2 臂 × 2 种子）结果：
+
+| 指标 | 对照（无 score） | 处理（有 score） |
+|---|---|---|
+| 正常 Le2i 7 段 | 全 0 ✅ | 全 0 ✅ |
+| 跌倒 5 段 首DANGER 均值 | 181.4 / 179.8 | 180.2 / 186.6 |
+| 真实 6 段 首DANGER 均值 | 154.0 / 145.8 | **117.3 / 123.8** |
+| **held-out 非人判定率** | **67.9% / 65.6%** | **60.2% / 58.7%** |
+
+核心指标稳定劣化 7.3 个点（两臂无重叠）。在 score 模型内部把该通道归零，判定率从
+60.2%→41.1%、58.7%→47.4% —— 通道**确实被用了**，但启用它反而挤占了其余通路。
+
+因此 `train_v2.py` 的默认是**关闭**（`--score-channel` 默认 off）。`51/57` 这两维
+在默认路径下被置零并由 `norm` 钉住（`mean=0 / std=1`），语义回到"不携带信息"。
+完整记录与三个实现陷阱见 [tuning-log.md](tuning-log.md) 2026-10-16 条目。
 
 ### 8.2 训练数据增强的维度对齐（中优先级）
 

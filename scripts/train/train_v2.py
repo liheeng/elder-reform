@@ -31,6 +31,11 @@ from scipy.optimize import minimize_scalar
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 from classifier.risk_classifier_v2 import RiskClassifierV2
+from features.feature_builder_v2 import (
+    HAS_SCORE_DIM,
+    SCORE_DIM,
+    score_channel_window_dims,
+)
 from utils.device import get_device, autocast_context, make_grad_scaler
 
 PROCESSED_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "processed")
@@ -238,6 +243,11 @@ def main():
     ap.add_argument("--seed", type=int, default=None,
                     help="随机种子；默认 None=不固定（保持既有行为）。"
                          "对比实验请显式指定，否则跑两次结果有差异")
+    ap.add_argument("--score-channel", action="store_true",
+                    help="启用检测框 score 那一路特征（dims 51/57 及其 vel/acc 共 6 维）。"
+                         "默认关闭 —— 2026-10-16 的受控消融显示它会把 held-out 非人"
+                         "判定率拉低约 7 个点，见 docs/tuning-log.md。"
+                         "此开关仅用于复现该实验")
     args = ap.parse_args()
     sfx = args.suffix
     out_sfx = sfx if args.out_suffix is None else args.out_suffix
@@ -264,10 +274,40 @@ def main():
     vids = np.load(os.path.join(PROCESSED_DIR, f"video_ids_v2{sfx}.npy"))
     print(f"  X: {X.shape}, y_class: {y_class.shape}, y_risk: {y_risk.shape}, y_time: {y_time.shape}, vids: {vids.shape}")
 
+    # ---- 1b. 检测框 score 通道 ----
+    # 51/57 是原地复用的废维（见 features/feature_builder_v2.py）。判断"这份数据
+    # 到底带不带 score 通道"，用 57 是不是严格 0/1 掩码最可靠 —— 只看 std 会被骗：
+    # 旧数据集这两维的 std 也有 14，全靠极少数回退帧塞进去的原始像素撑着。
+    score_dims = score_channel_window_dims()
+    mask_dim = X[:, :, HAS_SCORE_DIM]
+    mask_is_binary = bool(((mask_dim == 0.0) | (mask_dim == 1.0)).all())
+    if not args.score_channel:
+        # 默认路径：pos / vel / acc 六维必须一起清（见 score_channel_window_dims 的说明）
+        X[:, :, list(score_dims)] = 0.0
+        uses_score = False
+        print(f"  score 通道: 关闭（默认；{len(score_dims)} 个维已置零: {list(score_dims)}）")
+    else:
+        if not (mask_is_binary and bool((mask_dim == 1.0).any())):
+            raise SystemExit(
+                "[中止] dim %d 不是 0/1 掩码，这份数据集没有 score 通道。\n"
+                "  先重抽缓存并重建数据集（见 docs/tuning-log.md「如何复现」第 9a 条）；\n"
+                "  或去掉 --score-channel —— 默认就是关闭的。" % HAS_SCORE_DIM)
+        uses_score = True
+        print(f"  score 通道: 启用  dim{SCORE_DIM} 均值 {X[:, :, SCORE_DIM].mean():.4f} "
+              f"± {X[:, :, SCORE_DIM].std():.4f}，"
+              f"掩码为 1 的占比 {(mask_dim == 1.0).mean():.3f}")
+
     # ---- 2. Normalize ----
     print("\nNormalizing...")
     mean = X.mean(axis=(0, 1), keepdims=True)
     std = X.std(axis=(0, 1), keepdims=True) + 1e-8
+    if not uses_score:
+        # 对照臂这 6 维在训练数据里被精确置 0，std 会塌到 1e-8。而推理侧算出来
+        # 的是 ±5e-6 的浮点噪声，除以 1e-8 就是 ±500 的离群输入 —— 模型会恒报
+        # DANGER，且看不出哪里错了。钉成 mean=0 / std=1 把这 6 维原样摘出去。
+        for _d in score_dims:
+            mean[0, 0, _d] = 0.0
+            std[0, 0, _d] = 1.0
     X = (X - mean) / std
     np.savez(os.path.join(MODEL_DIR, f"norm_v2{out_sfx}.npz"),
              mean=mean.squeeze(), std=std.squeeze())
@@ -472,7 +512,9 @@ def main():
     with open(meta_path, "w", encoding="utf-8") as fh:
         json.dump({"encoder": args.encoder, "pooling": args.pooling,
                    "seed": args.seed, "data_suffix": sfx,
-                   "out_suffix": out_sfx}, fh, ensure_ascii=False, indent=2)
+                   "out_suffix": out_sfx, "uses_score": uses_score,
+                   "score_dims_pinned": not uses_score},
+                  fh, ensure_ascii=False, indent=2)
     print(f"  元信息 -> {meta_path}")
     print(f"\nFinal model saved -> {final_path}")
     print("\nDone.")

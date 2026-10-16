@@ -132,13 +132,15 @@ def get_ankle_y_avg(kp):
     return None
 
 
-def subsample_to_10fps(keypoints, confs, orig_fps=25.0):
+def subsample_to_10fps(keypoints, confs, scores=None, orig_fps=25.0):
     T = keypoints.shape[0]
     step = 1
     indices = np.arange(0, T, step).astype(int)
     if len(indices) > 0 and indices[-1] != T - 1:
         indices = np.append(indices, T - 1)
-    return keypoints[indices], confs[indices]
+    if scores is None:
+        return keypoints[indices], confs[indices]
+    return keypoints[indices], confs[indices], scores[indices]
 
 
 def parse_annotation_perframe(anno_path):
@@ -227,22 +229,46 @@ def get_window_class_and_risk(frame_labels, start, end, fall_start, fall_end,
     return CLASS_SAFE, RISK_SAFE, NORMAL_TIME
 
 
-def build_window_features(keypoints_seq, confs_seq=None):
+def build_window_features(keypoints_seq, confs_seq=None, scores_seq=None):
+    """逐帧 64 维 -> (T, 192) 的 pos + vel + acc。
+
+    scores_seq 给出每帧检测框 score 时，它写入 FeatureBuilderV2.SCORE_DIM，
+    并把 HAS_SCORE_DIM 置 1；不传则两维都保持原常量 0（无框分来源，如 PV）。
+    """
     T = len(keypoints_seq)
     pos_list = []
     for i in range(T):
         k = keypoints_seq[i]
         c = confs_seq[i] if confs_seq is not None else None
+        s = float(scores_seq[i]) if scores_seq is not None else None
         nk, nc = normalize_keypoints(k, c)
         if nk is None:
             nk, nc = k, c
-        pos_list.append(FeatureBuilderV2.build(nk, nc))
+        pos_list.append(FeatureBuilderV2.build(
+            nk, nc, score=s, has_score=1.0 if s is not None else None))
     pos = np.array(pos_list, dtype=np.float32)
     vel = np.zeros_like(pos)
     vel[1:] = pos[1:] - pos[:-1]
     acc = np.zeros_like(vel)
     acc[1:] = vel[1:] - vel[:-1]
     return np.concatenate([pos, vel, acc], axis=1).astype(np.float32)
+
+
+def load_scores(sc_path, n_frames):
+    """读取 score 缓存（与关键点同目录、同一 T）。
+
+    刻意不做静默回退：一部分片段有框分、另一部分没有，会让 HAS_SCORE_DIM
+    退化成"与场景强相关的伪特征"，比整份数据集都没有这一路信号更糟。
+    """
+    if not os.path.exists(sc_path):
+        raise FileNotFoundError(
+            "缺少 score 缓存: %s\n"
+            "  请先重抽: python scripts/build/extract_keypoints.py --overwrite" % sc_path)
+    scores = np.load(sc_path).astype(np.float32)
+    if scores.shape[0] != n_frames:
+        raise ValueError("score 缓存帧数 %d 与关键点 %d 不一致: %s"
+                         % (scores.shape[0], n_frames, sc_path))
+    return scores
 
 
 def main():
@@ -284,6 +310,7 @@ def main():
             video_id = vf.replace("video (", "").replace(").avi", "")
             kp_path = os.path.join(KEYPOINTS_DIR, f"{scene_name}_video_{video_id}_keypoints.npy")
             cf_path = os.path.join(KEYPOINTS_DIR, f"{scene_name}_video_{video_id}_confs.npy")
+            sc_path = os.path.join(KEYPOINTS_DIR, f"{scene_name}_video_{video_id}_scores.npy")
 
             if not os.path.exists(kp_path):
                 print(f"  跳过 video {video_id} (keypoints 缓存)")
@@ -291,14 +318,17 @@ def main():
 
             raw_keypoints = np.load(kp_path)
             raw_confs = np.load(cf_path)
-            raw_keypoints, raw_confs = interpolate_missing_frames(raw_keypoints, raw_confs)
+            raw_scores = load_scores(sc_path, raw_keypoints.shape[0])
+            raw_keypoints, raw_confs, raw_scores = interpolate_missing_frames(
+                raw_keypoints, raw_confs, raw_scores)
 
-            kp_10fps, cf_10fps = subsample_to_10fps(raw_keypoints, raw_confs)
+            kp_10fps, cf_10fps, sc_10fps = subsample_to_10fps(
+                raw_keypoints, raw_confs, raw_scores)
 
             anno_file = os.path.join(anno_dir, f"video ({video_id}).txt")
             fall_start, fall_end, frame_labels = parse_annotation_perframe(anno_file)
 
-            features = build_window_features(kp_10fps, cf_10fps)
+            features = build_window_features(kp_10fps, cf_10fps, sc_10fps)
             T_10 = features.shape[0]
 
             T_orig = raw_keypoints.shape[0]
@@ -362,6 +392,7 @@ def main():
 
             kp_path = os.path.join(KEYPOINTS_DIR, f"{scene_name}_video_{video_id}_keypoints.npy")
             cf_path = os.path.join(KEYPOINTS_DIR, f"{scene_name}_video_{video_id}_confs.npy")
+            sc_path = os.path.join(KEYPOINTS_DIR, f"{scene_name}_video_{video_id}_scores.npy")
 
             if not os.path.exists(kp_path):
                 print(f"  跳过 video {video_id} (keypoints 缓存)")
@@ -369,10 +400,13 @@ def main():
 
             raw_keypoints = np.load(kp_path)
             raw_confs = np.load(cf_path)
-            raw_keypoints, raw_confs = interpolate_missing_frames(raw_keypoints, raw_confs)
+            raw_scores = load_scores(sc_path, raw_keypoints.shape[0])
+            raw_keypoints, raw_confs, raw_scores = interpolate_missing_frames(
+                raw_keypoints, raw_confs, raw_scores)
 
-            kp_10fps, cf_10fps = subsample_to_10fps(raw_keypoints, raw_confs)
-            features = build_window_features(kp_10fps, cf_10fps)
+            kp_10fps, cf_10fps, sc_10fps = subsample_to_10fps(
+                raw_keypoints, raw_confs, raw_scores)
+            features = build_window_features(kp_10fps, cf_10fps, sc_10fps)
             T_10 = features.shape[0]
 
             T_orig = raw_keypoints.shape[0]

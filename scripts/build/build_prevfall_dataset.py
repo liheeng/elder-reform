@@ -96,7 +96,10 @@ def build_segment_features(kpts, confs):
         nk, nc = normalize_keypoints(kpts[i], confs[i])
         if nk is None:
             nk, nc = kpts[i], confs[i]
-        feat = FeatureBuilderV2.build(nk, nc)
+        # PV 来自 OpenPose JSON，根本没有检测框 score。显式传 has_score=0
+        # 让模型知道这一路的 0 是"缺信号"，不是"框分极低"——否则这 20% 数据
+        # 会被 score 通道推着往 NON_PERSON 靠，反而污染风险头那 23.6% 的监督。
+        feat = FeatureBuilderV2.build(nk, nc, score=0.0, has_score=0.0)
         pos_list.append(feat)
     pos = np.array(pos_list, dtype=np.float32)
 

@@ -13,6 +13,7 @@
 
 ## 目录
 
+- [2026-10-16 · 检测框 score 入分类头（实测否定，不采纳）](#2026-10-16--检测框-score-入分类头实测否定不采纳)
 - [2026-10-16 · 时序池化消融：末帧/均值/最大/注意力（实测否定，不采纳）](#2026-10-16--时序池化消融末帧均值最大注意力实测否定不采纳)
 - [2026-10-16 · 时序编码器替换消融：LSTM → TCN（实测否定，不采纳）](#2026-10-16--时序编码器替换消融lstm--tcn实测否定不采纳)
 - [2026-10-15 · 电动车仍被判成人：score 未入特征，负样本只有"夜间+抖动"一种](#2026-10-15--电动车仍被判成人score-未入特征负样本只有夜间抖动一种)
@@ -27,6 +28,111 @@
 - [如何复现](#如何复现)
 - [难例集](#难例集)
 - [新增条目模板](#新增条目模板)
+
+---
+
+## 2026-10-16 · 检测框 score 入分类头（实测否定，不采纳）
+
+### 现象
+
+承接 2026-10-15「电动车仍被判成人」的诊断：分类头的 192 维输入里**没有检测框
+`score`**，而实测 `score` 在真人与非人之间差 15–20 倍（真人中位 0.866 / 非人中位
+0.146）。当时列为遗留项，本轮把它真正接进特征并做受控消融。
+
+### 预检（先量化，再动手）
+
+在 4 段**未参与训练**的白天素材上（1208 个滑窗，见 [如何复现](#如何复现) 第 5 条），
+用生产模型分类，按判定结果分组统计窗内 `score` 中位数：
+
+| 分组 | 窗数 | score 中位 | p10 |
+|---|---|---|---|
+| `SAFE`（判错，可能报警） | 244 | 0.051 | 0.022 |
+| `FALLEN`（判错，强制报警） | 74 | 0.040 | 0.021 |
+| `NON_PERSON`（判对） | 832 | 0.078 | 0.032 |
+| **真人（Le2i 4 段，678 窗）** | — | **0.862** | **0.685** |
+
+判错组（318 窗）中位 0.048，**比真人组 p10 还低 14 倍**，且"判错组中 score ≥ 真人
+p10 的比例 = 0.0%" —— 窗口级完全可分。按预定的判定规则（判错组中位 < 真人 p10）
+**通过**，值得实现。
+
+> ⚠️ **事后修正**：这条预检只证明了"信息存在且可分"，**没有**证明"它对模型是增量
+> 信息"。非人窗口的 score 本来就只有 0.146，模型不靠它已经做到 68.9%。这一点是本轮
+> 最大的方法论教训，见 [optimization-review.md](optimization-review.md) 优化 13。
+
+### 改动
+
+`INPUT_DIM` 保持 **192，一个下标都没动** —— 复用 §8.1.2 那两个恒定废维：
+
+| 下标 | 原语义 | 新语义 |
+|---|---|---|
+| `51` / `115` / `179` | `pos/vel/acc` 的 `cg_y`（归一化后恒 ≈ 0） | 检测框 `score` |
+| `57` / `121` / `185` | 同上三段的 `cg_y_norm`（恒 ≈ 0） | score 有效标志（0/1） |
+
+掩码维是必需的：PV（OpenPose）没有检测框，占数据 20%、风险头 `risk>0` 监督的 23.6%；
+只填 0 不加掩码，模型会把这 20% 真人读成"框分极低"而推向 `NON_PERSON`。
+
+细节与文件清单见 [architecture.md](architecture.md) §8.1.3。
+
+### 效果
+
+**两臂用同一份新数据集**（`x_v2_nonperson.npy` 重建后），只差 score 那一路：
+
+| 指标 | 生产（旧数据） | 对照（无 score）s1 / s2 | 处理（有 score）s1 / s2 |
+|---|---|---|---|
+| 正常 Le2i 7 段 | 全 0 ✅ | 全 0 ✅ | 全 0 ✅ |
+| 跌倒 5 段 首DANGER 均值 | 178.2 | 181.4 / 179.8 | 180.2 / 186.6 |
+| 真实 6 段 首DANGER 均值 | 125.7 | 154.0 / 145.8 | **117.3 / 123.8** |
+| **held-out 非人判定率** | **68.9%** | **67.9% / 65.6%** | **60.2% / 58.7%** |
+
+**结论：不采纳。** 核心指标（held-out 非人判定率）**稳定劣化 7.3 个点**，两臂无重叠
+（处理臂最大 60.2% < 对照臂最小 65.6%）。真实组的"改善"逐视频看并不稳健：pd2 与
+stair2 明确支持、stair1 明确反对、pd4 两个种子自相差 104 帧，均值差主要由 pd2
+（290 → 150）一项撑起。
+
+**机制消融**（在 score 模型内部，把它自己的 score 通道在标准化空间归零）：
+
+| 模型 | 真实 score | score 通道归零 | 差值 |
+|---|---|---|---|
+| `_score_s1` | 60.2% | 41.1% | **+19.1** |
+| `_score_s2` | 58.7% | 47.4% | **+11.3** |
+
+即：**该通道确实被模型使用了**（贡献 11–19 个点），但启用它的两轮训练整体仍比对照差
+—— 典型的"捷径挤出其余通路"（启用后判 `SAFE` 的比例从 ~19% 升到 ~26–31%，说明几何
+通路的判别力被摊薄了）。
+
+### 踩过的坑
+
+1. **对照臂的归一化火药桶（最凶）**：把 6 维置零后算 `norm`，这两维
+   `std` 塌到 `1e-8`；而**推理侧算出来的是 ±5e-6 的浮点噪声**，除以 `1e-8` 就是
+   **z = ±274**。模型每帧都被推成垃圾输入 → 恒报 DANGER。症状是"正常 7 段几乎全
+   DANGER、且首 DANGER 都落在 40 帧左右"（缓冲区一满就报警）。
+   **修法**：对照臂把这几维在 `norm` 里钉成 `mean=0 / std=1`（从归一化里摘出去），
+   并在推理侧喂**精确 0**（由 meta 的 `score_dims_pinned` 驱动）。
+   **教训：任何"把某一维置零"的消融，都必须同时处理它在 `norm` 里的方差。**
+2. **只清 pos 段，vel/acc 段漏气**：`X[:, :, [51, 57]] = 0` 只清掉 pos 的两份，
+   `vel`/`acc` 里仍留着 score 的差分与二阶差分 → 对照臂不干净，不是真对照。
+   **修法**：抽出 `score_channel_window_dims()` 统一给出 6 个下标，训练与评估共用。
+3. **离线评估 harness 没走门控**：`eval_nonperson_effect.py` 无条件把 score 喂进特征，
+   于是同一份坑 1 的爆炸也复现了一遍（对照臂一度显示 0.0%）。修成按模型
+   `uses_score` / `score_dims_pinned` 选特征变体。
+   **教训：门控要落在"所有喂模型的入口"，不只是 `realtime_detect.py`。**
+4. **顺带发现一个此前未注意的训练/推理不一致**：`x_v2.npy` 构建于 **10-14 08:51**，
+   而 `conf 0.05→0.02` 那次提交在 **10-14 22:19** —— 晚 14 小时。也就是说
+   **当前生产模型是在 conf=0.05 抽的关键点上训练的，而推理一直用 conf=0.02**。
+   本轮重抽顺带修好了它（新数据集与推理抽取配置一致）。
+   对比两臂与生产可见：不带 score 时真实组首 DANGER 从 125.7 退化到 149.9 ——
+   这次"对齐"本身可能带来真实段退化，需要单独复查。
+
+### 遗留
+
+- 生产模型仍**无 meta**（`uses_score` 走默认 `False`），行为与改动前逐位一致
+  （正常 7 段实测仍全 0），无需回滚。
+- **`train_v2.py` 默认已改为"关闭 score 通道"**（开关改名 `--score-channel`，默认 off），
+  以免下一个人默认训出更差的模型；数据集里仍保留这一路，供复现。
+- 权重/归一化器未删，A/B 双方都留着：`models/lstm_v2_{noscore,score}_s{1,2}.*`。
+- 上述第 4 点（conf 对齐后真实段是否退化）需要至少 3 个种子才能定性，未排期。
+- 采集侧遗留未变：仍缺"快走/小跑"正常素材与**有人对照**；held-out 只有 4 段白天手持
+  素材、1 种场景，非人判定率的置信区间很宽。
 
 ---
 
@@ -1116,6 +1222,32 @@ python scripts/train/train_v2.py --suffix _nonperson --out-suffix _nonperson --s
 #      单一 0.30 / 复合门 -> 112 ;  朴素 0.20 -> 50
 python realtime_detect.py "/Volumes/media-backup/AI-data/dataset/falldown/Le2i-v2/Home_01/Home_01/Videos/video (10).avi"
 #    该视频标注的跌倒区间为 135-150（Annotation_files/video (10).txt 前两行）
+
+# 9. 检测框 score 通道的受控消融（2026-10-16，结论：不采纳）
+#    9a. 重抽缓存 —— 现在会多写一个 *_scores.npy（旧缓存缺它时 build 会直接报错）
+python scripts/build/extract_keypoints.py --overwrite                    # Le2i 全量（190 视频 / 约 7.6 万帧）
+python scripts/build/build_dataset_nonperson.py --force                  # 9 段夜间固定机位（进训练分片）
+python scripts/build/build_dataset_nonperson.py --cameras handheld \
+       --out-prefix /tmp/nonperson_day_tmp                               # 4 段白天手持（仅 held-out 用）
+python scripts/build/build_prevfall_dataset.py                           # PV：显式 has_score=0
+python scripts/build/build_dataset_v2.py                                 # Le2i + PV
+python scripts/build/merge_nonperson_v2.py                               # 并入分片
+#    9b. 两臂 × 2 种子（同一份数据，只差 score 通道）
+python scripts/train/train_v2.py --suffix _nonperson --seed 1 --out-suffix _noscore_s1   # 默认即关闭
+python scripts/train/train_v2.py --suffix _nonperson --seed 2 --out-suffix _noscore_s2
+python scripts/train/train_v2.py --suffix _nonperson --score-channel --seed 1 --out-suffix _score_s1
+python scripts/train/train_v2.py --suffix _nonperson --score-channel --seed 2 --out-suffix _score_s2
+#    9c. 两套评估（核心 KPI 是 held-out 非人判定率，LOSO 看不见 NON_PERSON：它的 support=0）
+python scripts/eval/eval_nonperson_effect.py \
+       --suffixes "_nonperson,_noscore_s1,_noscore_s2,_score_s1,_score_s2"
+for s in _nonperson _noscore_s1 _noscore_s2 _score_s1 _score_s2; do
+  python scripts/eval/eval_pipeline_regress.py --suffix $s
+done
+```
+
+> **⚠️ 动手前必读**：改动 `score` 通道后，**任何"把某一维置零"的消融都必须同时处理它
+> 在 `norm` 里的方差**（见 2026-10-16 条目的「踩过的坑」第 1 条），并让**所有**喂模型的
+> 入口都遵守同一门控（`uses_score` / `score_dims_pinned`），不只是 `realtime_detect.py`。
 ```
 
 > 要长期复跑的评估入口：

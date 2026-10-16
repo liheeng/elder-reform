@@ -31,6 +31,13 @@ class LSTMClassifierV2:
                 "attn" if any(k.startswith("attn.") for k in state) else "lastmean")
         self.encoder = encoder
         self.pooling = pooling
+        # 是否有检测框 score 那一路特征。缺 meta 的老权重一律按 False ——
+        # 老模型是在"这两维恒为 0"的数据上归一化的，喂入真实 score 属于
+        # 训练/推理不一致，必须让推理侧把它们继续留成 0。
+        self.uses_score = bool(meta.get("uses_score", False))
+        # 对照臂专用：训练时这两维被置零、归一化器里被钉成 mean=0/std=1，
+        # 推理侧必须喂精确 0（留几何原值会被 1e-8 的 std 放大成 ±500）。
+        self.score_dims_pinned = bool(meta.get("score_dims_pinned", False))
         self.model = RiskClassifierV2(input_dim=192, num_classes=4,
                                       encoder=encoder, pooling=pooling)
         self.model.load_state_dict(state)
@@ -45,7 +52,9 @@ class LSTMClassifierV2:
         if temperature_path and os.path.exists(temperature_path):
             self.temperature = float(np.load(temperature_path)["T"])
         print(f"[ClassifierV2] 4-class+risk model loaded "
-              f"(encoder={self.encoder}, pooling={self.pooling}, T={self.temperature:.3f})")
+              f"(encoder={self.encoder}, pooling={self.pooling}, "
+              f"score_channel={'on' if self.uses_score else 'off'}, "
+              f"T={self.temperature:.3f})")
 
     def normalize(self, sequence):
         return (sequence - self.mean.cpu().numpy()) / self.std.cpu().numpy()

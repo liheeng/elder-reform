@@ -1,5 +1,33 @@
 import numpy as np
 
+# 单帧特征 64 维布局：[0,51) = 17 x {x, y, conf}；[51,57) = 原始几何；[57,64) = 增强几何。
+#
+# 51 与 57 是"恒定废维"：归一化以 hip_center 为原点，故 cg_y 恒为 0（51），
+# cg_y_norm = cg_y / body_height 亦恒为 0（57）。（只有 normalize_keypoints 返回
+# None 的回退帧会把原始像素塞进来，约占 0.03%，正是旧数据集这两维 std≈14 的来源。）
+# 首版遗留的这两维全仓无人读取（见 docs/architecture.md §8.1.2），故原地复用来
+# 承载检测框 score 与其有效性掩码，从而在不改变 192 维输入形状、不移动任何既有
+# 下标的前提下新增一路信号。
+#
+# ⚠️ 不要复用 52/53/54/61/62：build_dataset_v2.is_sitting_posture_v2() 按下标读它们。
+SCORE_DIM = 51       # 原 cg_y 恒定废维 -> 检测框 score
+HAS_SCORE_DIM = 57   # 原 cg_y_norm 恒定废维 -> score 有效标志（1=可信，0=无此路信号）
+
+PER_FRAME_DIM = 64   # 单帧特征维度；窗口特征 = pos/vel/acc 三段拼起来
+
+
+def score_channel_window_dims(num_segments=3):
+    """score 通道在窗口特征 `(T, num_segments * PER_FRAME_DIM)` 里占据的全部下标。
+
+    pos / vel / acc 三段各含 `SCORE_DIM` 与 `HAS_SCORE_DIM` 两份，共 6 个下标。
+    要屏蔽这一路信号时必须六维一起处理：只清 pos 那两份的话，vel / acc 里仍留着
+    score 的差分与二阶差分，受控对照就漏气了。
+    """
+    return tuple(seg * PER_FRAME_DIM + d
+                 for seg in range(num_segments)
+                 for d in (SCORE_DIM, HAS_SCORE_DIM))
+
+
 class FeatureBuilderV2:
     NOSE, LEYE, REYE, LEAR, REAR = 0, 1, 2, 3, 4
     LSHO, RSHO, LELB, RELB, LWRI, RWRI = 5, 6, 7, 8, 9, 10
@@ -26,12 +54,16 @@ class FeatureBuilderV2:
         return float(np.degrees(np.arccos(cos_vert)))
 
     @staticmethod
-    def build(kpts, confs=None):
+    def build(kpts, confs=None, score=None, has_score=None):
         """
         Parameters
         ----------
         kpts : ndarray (17, 2)  COCO 关键点 x,y
         confs : ndarray (17,) or None  关键点置信度
+        score : float or None  检测框 score；None 则保持该维原常量值（0.0）
+        has_score : float or None  score 是否可信；None 则保持原常量值（0.0）。
+            仅由 PV(OpenPose) 数据显式传 0.0 —— 它没有框分，必须让模型知道
+            这一路的 0 是"缺信号"而不是"框分极低"，否则会被推着判成 NON_PERSON。
 
         Returns
         -------
@@ -77,23 +109,22 @@ class FeatureBuilderV2:
              left_hip_angle, right_hip_angle, torso_angle], dtype=np.float32
         )
 
-        return np.concatenate([base, geo_original, geo_new]).astype(np.float32)
+        feat = np.concatenate([base, geo_original, geo_new]).astype(np.float32)
+        if score is not None:
+            feat[SCORE_DIM] = score
+        if has_score is not None:
+            feat[HAS_SCORE_DIM] = has_score
+        return feat
 
 
-def interpolate_missing_frames(keypoints, confs):
+def _fill_neighbors(arr, valid_mask, tail_scale=1.0):
+    """把 arr 中 valid_mask 为假的帧按最近有效邻居填充。
+
+    两侧都有邻居时线性插值；只有一侧时复制该侧值再乘 tail_scale
+    （关键点用 1.0，置信度类用 0.3 —— 单侧填充属外推，需要自降可信度）。
     """
-    修复 YOLO 漏检导致的零填充帧。
-
-    keypoints: (T, 17, 2)
-    confs:     (T, 17)
-
-    Returns: (kp_out, cf_out) 修复后的数据。
-    """
-    T = keypoints.shape[0]
-    kp_out = keypoints.copy()
-    cf_out = confs.copy()
-    valid_mask = keypoints.reshape(T, -1).sum(axis=1) > 1.0
-
+    out = np.array(arr)
+    T = out.shape[0]
     for t in range(T):
         if valid_mask[t]:
             continue
@@ -106,13 +137,33 @@ def interpolate_missing_frames(keypoints, confs):
 
         if prev_t >= 0 and next_t < T:
             alpha = (t - prev_t) / max(next_t - prev_t, 1)
-            kp_out[t] = kp_out[prev_t] * (1 - alpha) + kp_out[next_t] * alpha
-            cf_out[t] = cf_out[prev_t] * (1 - alpha) + cf_out[next_t] * alpha
+            out[t] = out[prev_t] * (1 - alpha) + out[next_t] * alpha
         elif prev_t >= 0:
-            kp_out[t] = kp_out[prev_t]
-            cf_out[t] = cf_out[prev_t] * 0.3
+            out[t] = out[prev_t] * tail_scale
         elif next_t < T:
-            kp_out[t] = kp_out[next_t]
-            cf_out[t] = cf_out[next_t] * 0.3
+            out[t] = out[next_t] * tail_scale
+    return out
 
-    return kp_out, cf_out
+
+def interpolate_missing_frames(keypoints, confs, scores=None):
+    """
+    修复 YOLO 漏检导致的零填充帧。
+
+    keypoints: (T, 17, 2)
+    confs:     (T, 17)
+    scores:    (T,) or None  检测框 score
+
+    score 与 confs 同样按邻居插值（而不是留 0）：漏检帧的几何量已被插值伪造，
+    若 score 在此处骤降为 0，会引入一串"没人却有高分、突然掉到 0"的人造尖峰，
+    模型会去拟合这个采样瑕疵。真正的"该帧是漏检"由 confs 已下压的数值表达。
+
+    Returns: 未传 scores 时 (kp_out, cf_out)，传入时 (kp_out, cf_out, sc_out)。
+    """
+    T = keypoints.shape[0]
+    valid_mask = keypoints.reshape(T, -1).sum(axis=1) > 1.0
+
+    kp_out = _fill_neighbors(keypoints, valid_mask, tail_scale=1.0)
+    cf_out = _fill_neighbors(confs, valid_mask, tail_scale=0.3)
+    if scores is None:
+        return kp_out, cf_out
+    return kp_out, cf_out, _fill_neighbors(scores, valid_mask, tail_scale=0.3)

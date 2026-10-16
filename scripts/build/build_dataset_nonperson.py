@@ -90,34 +90,35 @@ def load_index(path: Path, cameras):
 
 def cache_paths(stem: str):
     return (KEYPOINTS_DIR / f"nonperson_{stem}_keypoints.npy",
-            KEYPOINTS_DIR / f"nonperson_{stem}_confs.npy")
+            KEYPOINTS_DIR / f"nonperson_{stem}_confs.npy",
+            KEYPOINTS_DIR / f"nonperson_{stem}_scores.npy")
 
 
 def load_or_extract(video_path: Path, extractor, force: bool, log_every: int):
-    """取关键点，优先用缓存。返回 (kpts, confs) 或 (None, None)。"""
-    kp_path, cf_path = cache_paths(video_path.stem)
-    if kp_path.exists() and cf_path.exists() and not force:
-        return np.load(kp_path), np.load(cf_path)
+    """取关键点，优先用缓存。返回 (kpts, confs, scores) 或 (None, None, None)。"""
+    kp_path, cf_path, sc_path = cache_paths(video_path.stem)
+    if kp_path.exists() and cf_path.exists() and sc_path.exists() and not force:
+        return np.load(kp_path), np.load(cf_path), np.load(sc_path)
 
-    kpts, confs, hit = extract_video(video_path, extractor, log_every=log_every)
+    kpts, confs, scores, hit = extract_video(video_path, extractor, log_every=log_every)
     if kpts is None or kpts.shape[0] == 0:
-        return None, None
-    save_cache(kpts, confs, kp_path, cf_path)
+        return None, None, None
+    save_cache(kpts, confs, scores, kp_path, cf_path, sc_path)
     print(f"    检出 {hit}/{kpts.shape[0]} 帧 ({hit / kpts.shape[0] * 100:.1f}%)，已缓存")
-    return kpts, confs
+    return kpts, confs, scores
 
 
 def build_clip(video_path: Path, extractor, force: bool, min_det_ratio: float,
                log_every: int):
     """把单个片段切成窗口。返回 (x_list, 统计字典) 或 (None, 统计字典)。"""
-    kpts, confs = load_or_extract(video_path, extractor, force, log_every)
+    kpts, confs, scores = load_or_extract(video_path, extractor, force, log_every)
     if kpts is None:
         return None, {"status": "跳过（抽点失败）"}
 
     # 有效帧判据与 interpolate_missing_frames 内部保持一致
     det_mask = kpts.reshape(kpts.shape[0], -1).sum(axis=1) > 1.0
-    kpts, confs = interpolate_missing_frames(kpts, confs)
-    feats = build_window_features(kpts, confs)
+    kpts, confs, scores = interpolate_missing_frames(kpts, confs, scores)
+    feats = build_window_features(kpts, confs, scores)
 
     total_frames = feats.shape[0]
     windows, kept, dropped = [], 0, 0

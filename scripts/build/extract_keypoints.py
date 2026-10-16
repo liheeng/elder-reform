@@ -4,12 +4,16 @@ extract_keypoints.py
 
 从 Le2i 原始视频预提取 YOLO-Pose 关键点缓存，供 build_dataset_v2.py / verify_real_videos.py 读取。
 
-产出（每个视频两个文件，写入 dataset/yolo_keypoints/）:
+产出（每个视频三个文件，写入 dataset/yolo_keypoints/）:
     {scene_name}_video_{video_id}_keypoints.npy   (T, 17, 2) float32  像素坐标
     {scene_name}_video_{video_id}_confs.npy       (T, 17)    float32  关键点置信度
+    {scene_name}_video_{video_id}_scores.npy      (T,)       float32  检测框 score
 
 T 为视频原始帧数（不降采样，10fps 抽样由 build 阶段完成）。
 漏检帧/无人帧写入全 0 行，与 features.interpolate_missing_frames 的零填充约定一致。
+
+scores.npy 供特征里 SCORE_DIM 那一路使用；旧缓存没有这个文件，build 阶段会
+回退到全 0（等价于"该数据集没有框分信号"）。
 
 逐帧走 PoseExtractor（含物品误检质量门与分裂检测合并），多人场景取
 kpts_conf.sum() 最大者，使训练前置逻辑与 realtime_detect.py 推理保持一致。
@@ -73,9 +77,11 @@ def suppress_native_stderr():
 
 
 def cache_paths(scene_name, video_id, out_dir):
-    """返回该视频的 (keypoints 路径, confs 路径)。"""
+    """返回该视频的 (keypoints 路径, confs 路径, scores 路径)。"""
     stem = "%s_video_%s" % (scene_name, video_id)
-    return out_dir / (stem + "_keypoints.npy"), out_dir / (stem + "_confs.npy")
+    return (out_dir / (stem + "_keypoints.npy"),
+            out_dir / (stem + "_confs.npy"),
+            out_dir / (stem + "_scores.npy"))
 
 
 def iter_videos(scene_name, video_dir, id_filter=None):
@@ -117,7 +123,7 @@ def parse_ids(spec):
 def select_person(persons):
     """从当前帧的候选里选人：取关键点置信度和最大者。
 
-    返回 (keypoints(17,2), confs(17)) 或 None。
+    返回 (keypoints(17,2), confs(17), score) 或 None。
     """
     best = None
     best_score = -1.0
@@ -132,24 +138,26 @@ def select_person(persons):
     if best is None:
         return None
     return (np.asarray(best["keypoints"], dtype=np.float32),
-            np.asarray(best["kpts_conf"], dtype=np.float32))
+            np.asarray(best["kpts_conf"], dtype=np.float32),
+            np.float32(best.get("score", 0.0)))
 
 
 def extract_video(video_path, extractor, log_every=200):
-    """逐帧抽点，返回 (keypoints (T,17,2), confs (T,17), 检出帧数)。
+    """逐帧抽点，返回 (keypoints (T,17,2), confs (T,17), scores (T,), 检出帧数)。
 
-    解码或推理异常时返回 (None, None, 0)，由调用方决定是否跳过该视频。
+    解码或推理异常时返回 (None, None, None, 0)，由调用方决定是否跳过该视频。
     整个循环置于 fd 2 抑制内，以静音 ffmpeg 在读取过程中输出的缺音轨告警。
     """
     kpts_list = []
     confs_list = []
+    scores_list = []
     hit = 0
     cap = None
     with suppress_native_stderr():
         try:
             cap = cv2.VideoCapture(str(video_path))
             if not cap.isOpened():
-                return None, None, 0
+                return None, None, None, 0
             while True:
                 ok, frame = cap.read()
                 if not ok:
@@ -158,27 +166,30 @@ def extract_video(video_path, extractor, log_every=200):
                 if selected is None:
                     kpts_list.append(np.zeros((NUM_KEYPOINTS, 2), dtype=np.float32))
                     confs_list.append(np.zeros(NUM_KEYPOINTS, dtype=np.float32))
+                    scores_list.append(np.float32(0.0))
                 else:
                     kpts_list.append(selected[0])
                     confs_list.append(selected[1])
+                    scores_list.append(selected[2])
                     hit += 1
                 if log_every and len(kpts_list) % log_every == 0:
                     print("      ... %d frames (检出 %d)" % (len(kpts_list), hit), flush=True)
         except Exception as exc:
             print("  [警告] 抽点失败 (%s): %s" % (type(exc).__name__, exc))
-            return None, None, 0
+            return None, None, None, 0
         finally:
             if cap is not None:
                 cap.release()
 
     kpts = np.stack(kpts_list) if kpts_list else np.zeros((0, NUM_KEYPOINTS, 2), dtype=np.float32)
     confs = np.stack(confs_list) if confs_list else np.zeros((0, NUM_KEYPOINTS), dtype=np.float32)
-    return kpts, confs, hit
+    scores = np.array(scores_list, dtype=np.float32)
+    return kpts, confs, scores, hit
 
 
-def save_cache(kpts, confs, kp_path, cf_path):
+def save_cache(kpts, confs, scores, kp_path, cf_path, sc_path):
     """先写临时文件再 os.replace，避免中断留下半截缓存。"""
-    for arr, path in ((kpts, kp_path), (confs, cf_path)):
+    for arr, path in ((kpts, kp_path), (confs, cf_path), (scores, sc_path)):
         tmp = path.with_name(path.name + ".tmp")
         # 显式 open，避免 np.save 给不含 .npy 的文件名自动补后缀
         with open(tmp, "wb") as fh:
@@ -264,20 +275,21 @@ def main():
         for scene_name, videos in plan:
             print("\n[%s] %d videos" % (scene_name, len(videos)))
             for video_id, video_path in videos:
-                kp_path, cf_path = cache_paths(scene_name, video_id, out_dir)
-                if kp_path.exists() and cf_path.exists() and not args.overwrite:
+                kp_path, cf_path, sc_path = cache_paths(scene_name, video_id, out_dir)
+                if (kp_path.exists() and cf_path.exists() and sc_path.exists()
+                        and not args.overwrite):
                     skipped += 1
                     print("  跳过 video (%s)（缓存已存在）" % video_id)
                     continue
 
                 print("  video (%s) ..." % video_id, flush=True)
-                kpts, confs, hit = extract_video(video_path, extractor)
+                kpts, confs, scores, hit = extract_video(video_path, extractor)
                 if kpts is None or len(kpts) == 0:
                     failed += 1
                     print("  [警告] 无法读取或为空视频，跳过: %s" % video_path.name)
                     continue
 
-                save_cache(kpts, confs, kp_path, cf_path)
+                save_cache(kpts, confs, scores, kp_path, cf_path, sc_path)
                 done += 1
                 frames_total += len(kpts)
                 hit_total += hit

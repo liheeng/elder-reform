@@ -174,6 +174,7 @@ elder-master-reformv4/
 ├── docs/                        # 文档
 │   ├── architecture.md          #   架构与已知问题详解
 │   ├── classification-logic.md  #   分类逻辑详解
+│   ├── quality-gate.md          #   检测阶段过滤：conf 阈值与质量门
 │   ├── optimization-review.md   #   优化过程回顾（四段式 + 方法论 + 术语小抄）
 │   ├── nonperson-collection.md  #   NON_PERSON 负样本采集规范
 │   └── tuning-log.md            #   调优记录（现象/根因/改动/效果，按时间倒序）

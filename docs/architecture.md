@@ -1414,5 +1414,6 @@ p99.9 = 8.00 的 9 倍）。真正的修法是按 §8.1.1 修掉回退路径，�
 ## 附录：相关文档
 
 - [`docs/classification-logic.md`](classification-logic.md) —— 4 类分类体系与标签生成规则详解
+- [`docs/quality-gate.md`](quality-gate.md) —— 检测阶段过滤：一个框要过哪 4 道环节、`conf` 为何设成 0.02、质量门的四条规则与两段式的由来、置信度/数量/跨度的判别力实测
 - `scripts/eval/trace_shapes.py` —— 形状、参数量与冗余维度自查工具
 - `README.md` —— 项目总览（注意版本偏差）

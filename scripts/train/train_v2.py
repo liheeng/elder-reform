@@ -24,7 +24,7 @@ import numpy as np
 from pathlib import Path
 
 import torch
-import torch.nn as nn
+from torch import nn
 from torch.utils.data import DataLoader, Dataset
 from sklearn.metrics import classification_report, confusion_matrix
 from scipy.optimize import minimize_scalar
@@ -127,6 +127,66 @@ class FallDatasetV2(Dataset):
         return x
 
 
+def _run_train_epoch(model, loader, optimizer, criterion):
+    """Run one training epoch and return sample-weighted component losses."""
+    model.train()
+    totals = np.zeros(4, dtype=np.float64)
+    sample_count = len(loader.dataset)
+
+    for X_batch, y_cls, y_risk, y_time in loader:
+        X_batch = X_batch.to(DEVICE, non_blocking=True)
+        y_cls = y_cls.to(DEVICE, non_blocking=True)
+        y_risk = y_risk.to(DEVICE, non_blocking=True)
+        y_time = y_time.to(DEVICE, non_blocking=True)
+        optimizer.zero_grad()
+        with autocast_context(DEVICE):
+            class_logits, risk_pred, time_pred = model(X_batch)
+            loss, loss_cls, loss_risk, loss_time = criterion(
+                class_logits, risk_pred, time_pred,
+                y_cls, y_risk, y_time)
+        SCALER.scale(loss).backward()
+        SCALER.unscale_(optimizer)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
+        SCALER.step(optimizer)
+        SCALER.update()
+        totals += np.array([
+            loss.item(), loss_cls.item(), loss_risk.item(), loss_time.item(),
+        ]) * len(X_batch)
+
+    return totals / sample_count
+
+
+def _run_validation_epoch(model, loader, criterion):
+    """Evaluate one epoch and return loss and predictions used by fold metrics."""
+    model.eval()
+    val_loss = 0.0
+    all_logits, all_true, all_risks_pred, all_risks_true = [], [], [], []
+    with torch.no_grad():
+        for X_batch, y_cls, y_risk, y_time in loader:
+            X_batch = X_batch.to(DEVICE, non_blocking=True)
+            y_cls = y_cls.to(DEVICE, non_blocking=True)
+            y_risk = y_risk.to(DEVICE, non_blocking=True)
+            y_time = y_time.to(DEVICE, non_blocking=True)
+            with autocast_context(DEVICE):
+                class_logits, risk_pred, time_pred = model(X_batch)
+                loss, _, _, _ = criterion(
+                    class_logits, risk_pred, time_pred,
+                    y_cls, y_risk, y_time)
+            val_loss += loss.item() * len(X_batch)
+            all_logits.append(class_logits.cpu().numpy())
+            all_true.extend(y_cls.cpu().numpy())
+            all_risks_pred.extend(risk_pred.cpu().numpy())
+            all_risks_true.extend(y_risk.cpu().numpy())
+
+    return (
+        val_loss / len(loader.dataset),
+        all_logits,
+        all_true,
+        all_risks_pred,
+        all_risks_true,
+    )
+
+
 # ==================================================
 # Train One Fold
 # ==================================================
@@ -142,60 +202,12 @@ def train_fold(train_loader, val_loader, class_weights, fold_id, encoder="lstm",
     best_loss = float("inf")
     best_state = None
     patience_counter = 0
-    n_train = len(train_loader.dataset)
-    n_val = len(val_loader.dataset)
 
     for epoch in range(1, EPOCHS + 1):
-        model.train()
-        train_loss = 0.0
-        train_cls_loss = 0.0
-        train_risk_loss = 0.0
-        train_time_loss = 0.0
-        for X_batch, y_cls, y_risk, y_time in train_loader:
-            X_batch = X_batch.to(DEVICE, non_blocking=True)
-            y_cls = y_cls.to(DEVICE, non_blocking=True)
-            y_risk = y_risk.to(DEVICE, non_blocking=True)
-            y_time = y_time.to(DEVICE, non_blocking=True)
-            optimizer.zero_grad()
-            with autocast_context(DEVICE):
-                class_logits, risk_pred, time_pred = model(X_batch)
-                loss, loss_cls, loss_risk, loss_time = criterion(
-                    class_logits, risk_pred, time_pred,
-                    y_cls, y_risk, y_time)
-            SCALER.scale(loss).backward()
-            SCALER.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
-            SCALER.step(optimizer)
-            SCALER.update()
-            train_loss += loss.item() * len(X_batch)
-            train_cls_loss += loss_cls.item() * len(X_batch)
-            train_risk_loss += loss_risk.item() * len(X_batch)
-            train_time_loss += loss_time.item() * len(X_batch)
-        train_loss /= n_train
-        train_cls_loss /= n_train
-        train_risk_loss /= n_train
-        train_time_loss /= n_train
-
-        model.eval()
-        val_loss = 0.0
-        all_logits, all_true, all_risks_pred, all_risks_true = [], [], [], []
-        with torch.no_grad():
-            for X_batch, y_cls, y_risk, y_time in val_loader:
-                X_batch = X_batch.to(DEVICE, non_blocking=True)
-                y_cls = y_cls.to(DEVICE, non_blocking=True)
-                y_risk = y_risk.to(DEVICE, non_blocking=True)
-                y_time = y_time.to(DEVICE, non_blocking=True)
-                with autocast_context(DEVICE):
-                    class_logits, risk_pred, time_pred = model(X_batch)
-                    loss, _, _, _ = criterion(
-                        class_logits, risk_pred, time_pred,
-                        y_cls, y_risk, y_time)
-                val_loss += loss.item() * len(X_batch)
-                all_logits.append(class_logits.cpu().numpy())
-                all_true.extend(y_cls.cpu().numpy())
-                all_risks_pred.extend(risk_pred.cpu().numpy())
-                all_risks_true.extend(y_risk.cpu().numpy())
-        val_loss /= n_val
+        train_losses = _run_train_epoch(model, train_loader, optimizer, criterion)
+        (val_loss, all_logits, all_true,
+         all_risks_pred, all_risks_true) = _run_validation_epoch(
+             model, val_loader, criterion)
 
         scheduler.step(val_loss)
 
@@ -211,9 +223,9 @@ def train_fold(train_loader, val_loader, class_weights, fold_id, encoder="lstm",
             acc = np.mean(preds == np.array(all_true))
             risk_mae = np.mean(np.abs(np.array(all_risks_pred) - np.array(all_risks_true)))
             print(f"  Fold {fold_id} Epoch {epoch:>3}/{EPOCHS}  "
-                  f"loss={train_loss:.4f}  val_loss={val_loss:.4f}  "
-                  f"cls={train_cls_loss:.4f}  risk={train_risk_loss:.4f}  "
-                  f"time={train_time_loss:.4f}  "
+                  f"loss={train_losses[0]:.4f}  val_loss={val_loss:.4f}  "
+                  f"cls={train_losses[1]:.4f}  risk={train_losses[2]:.4f}  "
+                  f"time={train_losses[3]:.4f}  "
                   f"val_acc={acc*100:.2f}%  risk_mae={risk_mae:.4f}  "
                   f"lr={optimizer.param_groups[0]['lr']:.6f}")
 
@@ -225,10 +237,7 @@ def train_fold(train_loader, val_loader, class_weights, fold_id, encoder="lstm",
     return model
 
 
-# ==================================================
-# Main
-# ==================================================
-def main():
+def parse_args():
     ap = argparse.ArgumentParser(description="v2 4 类 + risk 训练（3 折 LOSO）")
     ap.add_argument("--suffix", default="",
                     help="数据与产物文件名后缀；默认空=使用生产文件与路径")
@@ -248,40 +257,34 @@ def main():
                          "默认关闭 —— 2026-10-16 的受控消融显示它会把 held-out 非人"
                          "判定率拉低约 7 个点，见 docs/tuning-log.md。"
                          "此开关仅用于复现该实验")
-    args = ap.parse_args()
-    sfx = args.suffix
-    out_sfx = sfx if args.out_suffix is None else args.out_suffix
+    return ap.parse_args()
 
-    if args.seed is not None:
+
+def seed_everything(seed):
+    if seed is not None:
         import random
-        random.seed(args.seed)
-        np.random.seed(args.seed)
-        torch.manual_seed(args.seed)
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
 
-    print("=" * 60)
-    print("V2 4-Class + Risk Training with 3-fold LOSO CV")
-    print("=" * 60)
-    print(f"时序编码器: {args.encoder}   池化: {args.pooling}")
-    if sfx:
-        print(f"文件名后缀: {sfx}")
 
-    # ---- 1. Load Data ----
+def load_and_prepare_data(suffix, use_score_channel, out_suffix):
+    """Load arrays, apply the score-channel policy, and standardize inputs."""
     print("\nLoading data...")
-    X = np.load(os.path.join(PROCESSED_DIR, f"x_v2{sfx}.npy"))
-    y_class = np.load(os.path.join(PROCESSED_DIR, f"class_labels_v2{sfx}.npy"))
-    y_risk = np.load(os.path.join(PROCESSED_DIR, f"risk_labels_v2{sfx}.npy"))
-    y_time = np.load(os.path.join(PROCESSED_DIR, f"time_labels_v2{sfx}.npy"))
-    vids = np.load(os.path.join(PROCESSED_DIR, f"video_ids_v2{sfx}.npy"))
+    X = np.load(os.path.join(PROCESSED_DIR, f"x_v2{suffix}.npy"))
+    y_class = np.load(os.path.join(PROCESSED_DIR, f"class_labels_v2{suffix}.npy"))
+    y_risk = np.load(os.path.join(PROCESSED_DIR, f"risk_labels_v2{suffix}.npy"))
+    y_time = np.load(os.path.join(PROCESSED_DIR, f"time_labels_v2{suffix}.npy"))
+    vids = np.load(os.path.join(PROCESSED_DIR, f"video_ids_v2{suffix}.npy"))
     print(f"  X: {X.shape}, y_class: {y_class.shape}, y_risk: {y_risk.shape}, y_time: {y_time.shape}, vids: {vids.shape}")
 
-    # ---- 1b. 检测框 score 通道 ----
     # 51/57 是原地复用的废维（见 features/feature_builder_v2.py）。判断"这份数据
     # 到底带不带 score 通道"，用 57 是不是严格 0/1 掩码最可靠 —— 只看 std 会被骗：
     # 旧数据集这两维的 std 也有 14，全靠极少数回退帧塞进去的原始像素撑着。
     score_dims = score_channel_window_dims()
     mask_dim = X[:, :, HAS_SCORE_DIM]
     mask_is_binary = bool(((mask_dim == 0.0) | (mask_dim == 1.0)).all())
-    if not args.score_channel:
+    if not use_score_channel:
         # 默认路径：pos / vel / acc 六维必须一起清（见 score_channel_window_dims 的说明）
         X[:, :, list(score_dims)] = 0.0
         uses_score = False
@@ -289,7 +292,7 @@ def main():
     else:
         if not (mask_is_binary and bool((mask_dim == 1.0).any())):
             raise SystemExit(
-                "[中止] dim %d 不是 0/1 掩码，这份数据集没有 score 通道。\n"
+                "[中止] dim %d 不是 0/1 掩码，这份数据集没有 score 通道。\n"  # noqa: UP031
                 "  先重抽缓存并重建数据集（见 docs/tuning-log.md「如何复现」第 9a 条）；\n"
                 "  或去掉 --score-channel —— 默认就是关闭的。" % HAS_SCORE_DIM)
         uses_score = True
@@ -309,83 +312,116 @@ def main():
             mean[0, 0, _d] = 0.0
             std[0, 0, _d] = 1.0
     X = (X - mean) / std
-    np.savez(os.path.join(MODEL_DIR, f"norm_v2{out_sfx}.npz"),
+    np.savez(os.path.join(MODEL_DIR, f"norm_v2{out_suffix}.npz"),
              mean=mean.squeeze(), std=std.squeeze())
-    print(f"  Norm params saved -> {MODEL_DIR}/norm_v2{out_sfx}.npz")
+    print(f"  Norm params saved -> {MODEL_DIR}/norm_v2{out_suffix}.npz")
+    return X, y_class, y_risk, y_time, vids, uses_score
 
-    # ---- 3. Class Weights ----
+
+def compute_class_weights(y_class):
+    """Assign inverse-frequency weights so rare classes count more in CE loss."""
     counts = np.bincount(y_class, minlength=NUM_CLASSES).astype(np.float32)
     weights = np.where(counts == 0, 0.0, len(y_class) / (counts * NUM_CLASSES))
-    weights_tensor = torch.tensor(weights, dtype=torch.float32)
     print(f"\nClass distribution: {dict(zip(CLASS_NAMES, counts.tolist()))}")
     print(f"Class weights:       {dict(zip(CLASS_NAMES, [f'{w:.3f}' for w in weights]))}")
+    return torch.tensor(weights, dtype=torch.float32)
 
-    # ---- 4. LOSO with merged scenes (3 fold) ----
+
+def assign_cv_groups(vids):
+    """Map Pre-VFall subjects to three groups and return the held-out groups."""
     for i in range(len(vids)):
         if vids[i, 0] == 10:
             vids[i, 0] = 10 + int(vids[i, 1]) % 3
 
-    FOLD_GROUPS = [
+    return [
         [0, 1, 10],
         [2, 3, 11],
         [4, 5, 12],
     ]
-    print(f"\nFold groups: {FOLD_GROUPS}")
 
-    all_test_cls_logits = []
-    all_test_risk_preds = []
-    all_test_true_class = []
-    all_test_true_risk = []
 
-    for fold_idx, test_scenes in enumerate(FOLD_GROUPS):
+def run_cv_fold(X, y_class, y_risk, y_time, vids, test_scenes, fold_idx,
+                class_weights, out_suffix, encoder, pooling):
+    """Train one held-out scene group and return its predictions and labels."""
+    test_mask = np.isin(vids[:, 0], test_scenes)
+    train_mask = ~test_mask
+
+    X_train, yc_train = X[train_mask], y_class[train_mask]
+    yr_train, yt_train = y_risk[train_mask], y_time[train_mask]
+    X_test, yc_test = X[test_mask], y_class[test_mask]
+    yr_test, yt_test = y_risk[test_mask], y_time[test_mask]
+
+    train_vids = len(np.unique(vids[train_mask], axis=0))
+    test_vids = len(np.unique(vids[test_mask], axis=0))
+    print(f"  Train: {X_train.shape[0]} samples, {train_vids} videos")
+    print(f"  Test:  {X_test.shape[0]} samples, {test_vids} videos")
+
+    train_dataset = FallDatasetV2(X_train, yc_train, yr_train, yt_train, aug=True)
+    test_dataset = FallDatasetV2(X_test, yc_test, yr_test, yt_test, aug=False)
+    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True,
+                              pin_memory=True)
+    test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False,
+                             pin_memory=True)
+
+    # Keep the existing protocol: the held-out fold also drives scheduling
+    # and early stopping as train_fold's validation loader.
+    model = train_fold(train_loader, test_loader, class_weights, fold_idx + 1,
+                       encoder=encoder, pooling=pooling)
+
+    test_logits, test_risk_preds = [], []
+    test_classes, test_risks = [], []
+    model.eval()
+    with torch.no_grad():
+        for X_batch, y_cls_batch, y_risk_batch, y_time_batch in test_loader:
+            X_batch = X_batch.to(DEVICE)
+            class_logits, risk_pred, time_pred = model(X_batch)
+            test_logits.append(class_logits.cpu().numpy())
+            test_risk_preds.append(risk_pred.cpu().numpy())
+            test_classes.extend(y_cls_batch.numpy())
+            test_risks.extend(y_risk_batch.numpy())
+
+    torch.save(
+        model.state_dict(),
+        os.path.join(MODEL_DIR, f"lstm_v2_fold{fold_idx+1}{out_suffix}.pt"),
+    )
+    print(f"  Model saved -> lstm_v2_fold{fold_idx+1}.pt")
+    return test_logits, test_classes, test_risk_preds, test_risks
+
+
+def run_cross_validation(X, y_class, y_risk, y_time, vids, class_weights,
+                         out_suffix, encoder, pooling):
+    """Train and collect held-out predictions for each predefined scene group."""
+    fold_groups = assign_cv_groups(vids)
+    print(f"\nFold groups: {fold_groups}")
+    all_test_cls_logits, all_test_risk_preds = [], []
+    all_test_true_class, all_test_true_risk = [], []
+
+    for fold_idx, test_scenes in enumerate(fold_groups):
         print(f"\n{'='*60}")
-        print(f"Fold {fold_idx+1}/{len(FOLD_GROUPS)}  Test Scenes = {test_scenes}")
+        print(f"Fold {fold_idx+1}/{len(fold_groups)}  Test Scenes = {test_scenes}")
         print(f"{'='*60}")
+        (fold_logits, fold_classes, fold_risk_preds,
+         fold_risks) = run_cv_fold(
+             X, y_class, y_risk, y_time, vids, test_scenes, fold_idx,
+             class_weights, out_suffix, encoder, pooling)
+        all_test_cls_logits.extend(fold_logits)
+        all_test_true_class.extend(fold_classes)
+        all_test_risk_preds.extend(fold_risk_preds)
+        all_test_true_risk.extend(fold_risks)
 
-        test_mask = np.isin(vids[:, 0], test_scenes)
-        train_mask = ~test_mask
+    return (
+        np.concatenate(all_test_cls_logits, axis=0),
+        np.array(all_test_true_class),
+        np.concatenate(all_test_risk_preds),
+        np.array(all_test_true_risk),
+    )
 
-        X_train, yc_train = X[train_mask], y_class[train_mask]
-        yr_train, yt_train = y_risk[train_mask], y_time[train_mask]
-        X_test, yc_test = X[test_mask], y_class[test_mask]
-        yr_test, yt_test = y_risk[test_mask], y_time[test_mask]
 
-        train_vids = len(np.unique(vids[train_mask], axis=0))
-        test_vids = len(np.unique(vids[test_mask], axis=0))
-        print(f"  Train: {X_train.shape[0]} samples, {train_vids} videos")
-        print(f"  Test:  {X_test.shape[0]} samples, {test_vids} videos")
-
-        train_dataset = FallDatasetV2(X_train, yc_train, yr_train, yt_train, aug=True)
-        test_dataset = FallDatasetV2(X_test, yc_test, yr_test, yt_test, aug=False)
-
-        train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True,
-                                  pin_memory=True)
-        test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False,
-                                 pin_memory=True)
-
-        model = train_fold(train_loader, test_loader, weights_tensor, fold_idx + 1,
-                           encoder=args.encoder, pooling=args.pooling)
-
-        model.eval()
-        with torch.no_grad():
-            for X_batch, y_cls_batch, y_risk_batch, y_time_batch in test_loader:
-                X_batch = X_batch.to(DEVICE)
-                class_logits, risk_pred, time_pred = model(X_batch)
-                all_test_cls_logits.append(class_logits.cpu().numpy())
-                all_test_risk_preds.append(risk_pred.cpu().numpy())
-                all_test_true_class.extend(y_cls_batch.numpy())
-                all_test_true_risk.extend(y_risk_batch.numpy())
-
-        torch.save(model.state_dict(), os.path.join(MODEL_DIR, f"lstm_v2_fold{fold_idx+1}{out_sfx}.pt"))
-        print(f"  Model saved -> lstm_v2_fold{fold_idx+1}.pt")
-
-    # ---- 5. Temperature Scaling (class head only) ----
+def calibrate_temperature(all_test_cls_logits, all_test_true_class, out_suffix):
+    """Fit and save the scalar temperature for the classification head."""
     print(f"\n{'='*60}")
     print("Temperature Scaling (class head only)")
     print(f"{'='*60}")
-
-    all_test_cls_logits = np.concatenate(all_test_cls_logits, axis=0)
-    all_test_true_class = np.array(all_test_true_class)
 
     def nll(T):
         if T <= 0:
@@ -401,15 +437,17 @@ def main():
     best_T = float(res.x)
     print(f"  Best temperature: {best_T:.4f}")
 
-    np.savez(os.path.join(MODEL_DIR, f"temperature_v2{out_sfx}.npz"), T=best_T)
-    print(f"  Saved -> {MODEL_DIR}/temperature_v2{out_sfx}.npz")
+    np.savez(os.path.join(MODEL_DIR, f"temperature_v2{out_suffix}.npz"), T=best_T)
+    print(f"  Saved -> {MODEL_DIR}/temperature_v2{out_suffix}.npz")
+    return best_T
 
-    # ---- 6. Final Class Metrics ----
+
+def report_class_metrics(all_test_cls_logits, all_test_true_class, temperature):
     print(f"\n{'='*60}")
     print("Final Class Metrics (all folds combined, calibrated)")
     print(f"{'='*60}")
 
-    calibrated_logits = all_test_cls_logits / best_T
+    calibrated_logits = all_test_cls_logits / temperature
     calibrated_preds = np.argmax(calibrated_logits, axis=1)
 
     print("\nClassification Report:")
@@ -427,13 +465,12 @@ def main():
         row = "  ".join(f"{cm[i,j]:>8}" for j in range(NUM_CLASSES))
         print(f"{name:>10}: {row}")
 
-    # ---- 7. Risk Metrics ----
+
+def report_risk_metrics(all_test_risk_preds, all_test_true_risk):
     print(f"\n{'='*60}")
     print("Final Risk Metrics")
     print(f"{'='*60}")
 
-    all_test_risk_preds = np.concatenate(all_test_risk_preds)
-    all_test_true_risk = np.array(all_test_true_risk)
     risk_mae = np.mean(np.abs(all_test_risk_preds - all_test_true_risk))
     risk_mse = np.mean((all_test_risk_preds - all_test_true_risk)**2)
     print(f"  Risk MAE: {risk_mae:.4f}")
@@ -443,7 +480,9 @@ def main():
     risk_thres_acc = np.mean((all_test_risk_preds >= threshold) == (all_test_true_risk >= threshold))
     print(f"  Risk threshold accuracy (t={threshold}): {risk_thres_acc*100:.2f}%")
 
-    # ---- 8. Final Retrain on All Data ----
+
+def train_full_dataset(X, y_class, y_risk, y_time, class_weights, encoder, pooling):
+    """Train the production model, selecting its checkpoint by training loss."""
     print(f"\n{'='*60}")
     print("Final Retrain on All Data")
     print(f"{'='*60}")
@@ -452,39 +491,20 @@ def main():
     full_loader = DataLoader(full_dataset, batch_size=BATCH_SIZE, shuffle=True,
                              pin_memory=True)
 
-    model = RiskClassifierV2(encoder=args.encoder, pooling=args.pooling).to(DEVICE)
+    model = RiskClassifierV2(encoder=encoder, pooling=pooling).to(DEVICE)
     optimizer = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="min", factor=0.5, patience=5, min_lr=1e-6,
     )
-    criterion = MultiTaskLoss(weights_tensor.to(DEVICE), LAMBDA_RISK, LAMBDA_TIME)
+    criterion = MultiTaskLoss(class_weights.to(DEVICE), LAMBDA_RISK, LAMBDA_TIME)
 
     best_loss = float("inf")
     best_state = None
     patience_counter = 0
-    n_full = len(full_dataset)
 
     for epoch in range(1, EPOCHS + 1):
-        model.train()
-        train_loss = 0.0
-        for X_batch, y_cls, y_risk, y_time in full_loader:
-            X_batch = X_batch.to(DEVICE, non_blocking=True)
-            y_cls = y_cls.to(DEVICE, non_blocking=True)
-            y_risk = y_risk.to(DEVICE, non_blocking=True)
-            y_time = y_time.to(DEVICE, non_blocking=True)
-            optimizer.zero_grad()
-            with autocast_context(DEVICE):
-                class_logits, risk_pred, time_pred = model(X_batch)
-                loss, _, _, _ = criterion(
-                    class_logits, risk_pred, time_pred,
-                    y_cls, y_risk, y_time)
-            SCALER.scale(loss).backward()
-            SCALER.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
-            SCALER.step(optimizer)
-            SCALER.update()
-            train_loss += loss.item() * len(X_batch)
-        train_loss /= n_full
+        train_losses = _run_train_epoch(model, full_loader, optimizer, criterion)
+        train_loss = train_losses[0]
 
         scheduler.step(train_loss)
 
@@ -504,22 +524,67 @@ def main():
             break
 
     model.load_state_dict(best_state)
-    final_path = os.path.join(MODEL_DIR, f"lstm_v2{out_sfx}.pt")
+    return model
+
+
+def save_final_artifacts(model, out_suffix, data_suffix, encoder, pooling,
+                         seed, uses_score):
+    final_path = os.path.join(MODEL_DIR, f"lstm_v2{out_suffix}.pt")
     torch.save(model.state_dict(), final_path)
     # 权重自描述：non-attn 的各种池化权重键名完全相同，缺了这份 meta
     # 评估侧会静默套用错误的池化方式，结果错但不报错。
     meta_path = Path(final_path).with_suffix(".meta.json")
     with open(meta_path, "w", encoding="utf-8") as fh:
-        json.dump({"encoder": args.encoder, "pooling": args.pooling,
-                   "seed": args.seed, "data_suffix": sfx,
-                   "out_suffix": out_sfx, "uses_score": uses_score,
+        json.dump({"encoder": encoder, "pooling": pooling,
+                   "seed": seed, "data_suffix": data_suffix,
+                   "out_suffix": out_suffix, "uses_score": uses_score,
                    "score_dims_pinned": not uses_score},
                   fh, ensure_ascii=False, indent=2)
     print(f"  元信息 -> {meta_path}")
     print(f"\nFinal model saved -> {final_path}")
+
+
+# ==================================================
+# Main
+# ==================================================
+def main():
+    args = parse_args()
+    suffix = args.suffix
+    out_suffix = suffix if args.out_suffix is None else args.out_suffix
+    seed_everything(args.seed)
+
+    print("=" * 60)
+    print("V2 4-Class + Risk Training with 3-fold LOSO CV")
+    print("=" * 60)
+    print(f"时序编码器: {args.encoder}   池化: {args.pooling}")
+    if suffix:
+        print(f"文件名后缀: {suffix}")
+
+    # 1. Load data, apply the score-channel policy, and save inference normalization.
+    X, y_class, y_risk, y_time, vids, uses_score = load_and_prepare_data(
+        suffix, args.score_channel, out_suffix)
+
+    # 2. Balance classes and evaluate each held-out scene group.
+    class_weights = compute_class_weights(y_class)
+    (all_test_cls_logits, all_test_true_class,
+     all_test_risk_preds, all_test_true_risk) = run_cross_validation(
+         X, y_class, y_risk, y_time, vids, class_weights, out_suffix,
+         args.encoder, args.pooling)
+
+    # 3. Calibrate the class probabilities and report cross-validation metrics.
+    temperature = calibrate_temperature(
+        all_test_cls_logits, all_test_true_class, out_suffix)
+    report_class_metrics(all_test_cls_logits, all_test_true_class, temperature)
+    report_risk_metrics(all_test_risk_preds, all_test_true_risk)
+
+    # 4. Retrain on all data and save the production model and metadata.
+    model = train_full_dataset(
+        X, y_class, y_risk, y_time, class_weights, args.encoder, args.pooling)
+    save_final_artifacts(
+        model, out_suffix, suffix, args.encoder, args.pooling, args.seed,
+        uses_score)
     print("\nDone.")
 
 
 if __name__ == "__main__":
     main()
-

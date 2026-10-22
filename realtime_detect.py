@@ -88,7 +88,7 @@ def draw_lost_result(frame, bbox, risk_score, person_id, missing_frames):
     return frame
 
 
-def main(video_path=None):
+def _create_pipeline():
     pose_ext = PoseExtractor(model_path=POSE_MODEL)
     tracker = PersonTracker(max_missing=MISSING_TOLERANCE)
     buffer = SequenceBufferV3(seq_len=WINDOW_SIZE)
@@ -99,10 +99,13 @@ def main(video_path=None):
     )
     risk_engine = RiskEngineV2()
 
-    # 每个 ID 一份: 最近一帧可用特征(丢失时用于填充)/最近一次推理结果(丢失后继续显示)
+    # 按 ID 保存最近特征和报警状态，供短暂漏检时继续维护时序。
     last_feature = {}
     display = {}
+    return pose_ext, tracker, buffer, classifier, risk_engine, last_feature, display
 
+
+def _open_video(video_path):
     if video_path is None:
         cap = cv2.VideoCapture(0)
         source_name = "Camera"
@@ -112,6 +115,134 @@ def main(video_path=None):
 
     if not cap.isOpened():
         print(f"Error: Cannot open {source_name}")
+        return None, source_name
+    return cap, source_name
+
+
+def _draw_frame_status(frame, tracks, display, has_live_target, no_person_frames):
+    # 丢失目标仍有跌倒报警时，优先显示报警而不是普通的无人提示。
+    lost_danger = [track for track in tracks
+                   if track["missing"] > 0
+                   and display.get(track["id"], {}).get("state") == "DANGER"]
+
+    if lost_danger:
+        cv2.putText(frame, "FALL SUSPECTED (target lost)", (10, 50),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+    elif not has_live_target:
+        if no_person_frames >= MISSING_TOLERANCE:
+            cv2.putText(frame, "Target lost", (10, 50),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (128, 128, 128), 2)
+        else:
+            cv2.putText(frame, "No person", (10, 50),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (128, 128, 128), 1)
+
+
+def _process_live_track(frame, track, buffer, classifier, risk_engine,
+                        last_feature, display):
+    person_id = track["id"]
+    bbox = track["bbox"]
+    kpts = track["keypoints"]
+    kpts_conf = track["kpts_conf"]
+    bbox_score = float(track.get("score", 0.0))
+
+    # 按权重版本匹配 score 输入：启用、训练时固定关闭，或旧版权重。
+    if getattr(classifier, "uses_score", False):
+        feature_kwargs = {"score": bbox_score, "has_score": 1.0}
+    elif getattr(classifier, "score_dims_pinned", False):
+        feature_kwargs = {"score": 0.0, "has_score": 0.0}
+    else:
+        feature_kwargs = {}
+
+    nk, nc = normalize_keypoints(kpts, kpts_conf)
+    if nk is not None:
+        feature = FeatureBuilderV2.build(nk, nc, **feature_kwargs)
+    else:
+        feature = FeatureBuilderV2.build(kpts, kpts_conf, **feature_kwargs)
+    last_feature[person_id] = feature
+    buffer.update(person_id, feature)
+
+    # 每个 ID 独立累积窗口；窗口就绪后才进行推理。
+    if not buffer.is_ready(person_id):
+        return frame
+
+    seq_192 = build_192_feature(buffer, person_id)
+    if seq_192 is not None and seq_192.shape == (WINDOW_SIZE, 192):
+        result = classifier.predict(seq_192)
+        rr = risk_engine.update(
+            person_id,
+            class_id=result["class_id"],
+            model_risk=result["risk"],
+        )
+
+        time_val = result.get("time_to_fall", 0)
+        display[person_id] = {
+            "state": rr["state"],
+            "risk": rr["risk_score"],
+        }
+        frame = draw_result(frame, bbox, rr["state"], rr["risk_score"],
+                            person_id, time_val)
+    return frame
+
+
+def _process_track(frame, track, has_live_target, buffer, classifier,
+                   risk_engine, last_feature, display):
+    person_id = track["id"]
+    bbox = track["bbox"]
+
+    if track["missing"] > 0:
+        # 用上一帧特征填充，避免漏检造成虚假的速度突变。
+        if person_id in last_feature:
+            buffer.update(person_id, last_feature[person_id])
+        info = display.get(person_id)
+        if info is None or info["state"] != "DANGER":
+            return frame
+        # 只有当前没有实时目标时才画历史框，避免被误认成实时检测框。
+        if not has_live_target:
+            frame = draw_lost_result(
+                frame, bbox, info["risk"], person_id, track["missing"])
+        return frame
+
+    return _process_live_track(
+        frame, track, buffer, classifier, risk_engine, last_feature, display)
+
+
+def _process_frame(frame, pose_ext, tracker, buffer, classifier, risk_engine,
+                   last_feature, display, no_person_frames):
+    persons = pose_ext.extract(frame)
+    tracks, removed_ids = tracker.update(persons)
+    has_live_target = len(persons) > 0
+
+    # 跟踪器永久移除 ID 后，清理该目标关联的全部状态。
+    for person_id in removed_ids:
+        buffer.remove(person_id)
+        risk_engine.remove(person_id)
+        last_feature.pop(person_id, None)
+        display.pop(person_id, None)
+
+    if has_live_target:
+        no_person_frames = 0
+    else:
+        no_person_frames += 1
+    _draw_frame_status(
+        frame, tracks, display, has_live_target, no_person_frames)
+
+    for track in tracks:
+        frame = _process_track(
+            frame, track, has_live_target, buffer, classifier, risk_engine,
+            last_feature, display)
+    return frame, no_person_frames
+
+
+def _release_video(cap):
+    cap.release()
+    cv2.destroyAllWindows()
+
+
+def main(video_path=None):
+    (pose_ext, tracker, buffer, classifier, risk_engine,
+     last_feature, display) = _create_pipeline()
+    cap, source_name = _open_video(video_path)
+    if cap is None:
         return
 
     fps = cap.get(cv2.CAP_PROP_FPS)
@@ -125,120 +256,25 @@ def main(video_path=None):
 
     frame_count = 0
     no_person_frames = 0
+    try:
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            frame_count += 1
 
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-        frame_count += 1
+            frame, no_person_frames = _process_frame(
+                frame, pose_ext, tracker, buffer, classifier, risk_engine,
+                last_feature, display, no_person_frames)
+            cv2.putText(frame, f"Frame: {frame_count}", (10, 25),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+            cv2.imshow("Fall Detection", frame)
 
-        persons = pose_ext.extract(frame)
-        tracks, removed_ids = tracker.update(persons)
-        has_live_target = len(persons) > 0
+            if cv2.waitKey(100) & 0xFF == ord("q"):
+                break
+    finally:
+        _release_video(cap)
 
-        # ---- 跟踪器判定该目标已消失: 清理其全部状态 ----
-        for person_id in removed_ids:
-            buffer.remove(person_id)
-            risk_engine.remove(person_id)
-            last_feature.pop(person_id, None)
-            display.pop(person_id, None)
-
-        # ---- 状态栏: 丢失中的跌倒目标优先于"无人"提示 ----
-        lost_danger = [t for t in tracks
-                       if t["missing"] > 0
-                       and display.get(t["id"], {}).get("state") == "DANGER"]
-
-        if not has_live_target:
-            no_person_frames += 1
-        else:
-            no_person_frames = 0
-
-        if lost_danger:
-            cv2.putText(frame, "FALL SUSPECTED (target lost)", (10, 50),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
-        elif not has_live_target:
-            if no_person_frames >= MISSING_TOLERANCE:
-                cv2.putText(frame, "Target lost", (10, 50),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (128, 128, 128), 2)
-            else:
-                cv2.putText(frame, "No person", (10, 50),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (128, 128, 128), 1)
-
-        for track in tracks:
-            person_id = track["id"]
-            bbox = track["bbox"]
-
-            # ---- 本帧未检出该目标 ----
-            if track["missing"] > 0:
-                # 用上一帧特征填充, 防止 velocity 通道出现人为跳变
-                if person_id in last_feature:
-                    buffer.update(person_id, last_feature[person_id])
-                info = display.get(person_id)
-                if info is None or info["state"] != "DANGER":
-                    continue
-                # 画面里还有已检出的活体目标时只留报警文字, 不画历史框,
-                # 否则一个停在旧位置的框会被误当成实时检测结果
-                if not has_live_target:
-                    draw_lost_result(frame, bbox, info["risk"], person_id,
-                                     track["missing"])
-                continue
-
-            kpts = track["keypoints"]
-            kpts_conf = track["kpts_conf"]
-            bbox_score = float(track.get("score", 0.0))
-            # 三条分支，各对应一代权重：
-            #  uses_score        训练时启用了 score 通道 -> 喂真实 score + 掩码
-            #  score_dims_pinned 对照臂：训练时这两维被置零，且归一化器里
-            #                    mean=0/std=1 -> 必须喂精确 0 才对得上
-            #  都没有              老权重：这两维在它眼里是"回退帧污染"探测器，
-            #                    保持几何原值，行为与本次改动前逐位一致
-            if getattr(classifier, "uses_score", False):
-                kw = {"score": bbox_score, "has_score": 1.0}
-            elif getattr(classifier, "score_dims_pinned", False):
-                kw = {"score": 0.0, "has_score": 0.0}
-            else:
-                kw = {}
-
-            # 使用 FeatureBuilderV2 构建 64 维特征
-            nk, nc = normalize_keypoints(kpts, kpts_conf)
-            if nk is not None:
-                feature = FeatureBuilderV2.build(nk, nc, **kw)
-            else:
-                feature = FeatureBuilderV2.build(kpts, kpts_conf, **kw)
-            last_feature[person_id] = feature
-
-            buffer.update(person_id, feature)
-
-            # 每人各自缓存满 WINDOW_SIZE 帧才推理
-            if not buffer.is_ready(person_id):
-                continue
-
-            seq_192 = build_192_feature(buffer, person_id)
-            if seq_192 is not None and seq_192.shape == (WINDOW_SIZE, 192):
-                result = classifier.predict(seq_192)
-                rr = risk_engine.update(
-                    person_id,
-                    class_id=result["class_id"],
-                    model_risk=result["risk"],
-                )
-
-                time_val = result.get("time_to_fall", 0)
-                display[person_id] = {
-                    "state": rr["state"],
-                    "risk": rr["risk_score"],
-                }
-                frame = draw_result(frame, bbox, rr["state"], rr["risk_score"],
-                                    person_id, time_val)
-
-        cv2.putText(frame, f"Frame: {frame_count}", (10, 25),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
-        cv2.imshow("Fall Detection", frame)
-
-        if cv2.waitKey(100) & 0xFF == ord("q"):
-            break
-
-    cap.release()
-    cv2.destroyAllWindows()
     print(f"Processed {frame_count} frames")
 
 

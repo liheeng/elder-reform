@@ -17,6 +17,10 @@ class RiskEngineV2:
     CLASS_SITTING = 2
     CLASS_NON_PERSON = 3
 
+    STATE_SAFE = "SAFE"
+    STATE_WARNING = "WARNING"
+    STATE_DANGER = "DANGER"
+
     def __init__(self, smooth_alpha=0.4, warning_thres=0.40,
                  trigger_frames=10, lock_frames=15):
         # warning_thres 0.35 -> 0.40 (2026-10): conf 降到 0.02 后，边缘处低分
@@ -33,8 +37,11 @@ class RiskEngineV2:
         self.danger_confirmed = {}
         self.lock_count = {}
 
+    def _is_tracked(self, person_id):
+        return person_id in self.smooth_score
+
     def _init_if_needed(self, person_id):
-        if person_id not in self.smooth_score:
+        if not self._is_tracked(person_id):
             self.smooth_score[person_id] = 0.0
             self.counter[person_id] = 0
             self.danger_confirmed[person_id] = False
@@ -50,18 +57,31 @@ class RiskEngineV2:
     def _compute_danger_prob(self, class_id, model_risk):
         """融合分类结果和回归风险值。"""
         # 安全关卡：坐姿和非人 → 强制零风险
-        if class_id in (self.CLASS_SITTING, self.CLASS_NON_PERSON):
+        if self._is_risk_exempt_class(class_id):
             return 0.0
 
         # 致命关卡：已倒地 → 至少 0.7
-        if class_id == self.CLASS_FALLEN:
+        if self._is_fallen_class(class_id):
             return max(float(model_risk), 0.7)
 
         # 正常状态：回归头直达
-        if class_id == self.CLASS_SAFE:
+        if self._is_safe_class(class_id):
             return max(0.0, min(1.0, float(model_risk)))
 
         return 0.0
+
+    def _is_risk_exempt_class(self, class_id):
+        """坐姿与非人目标恒安全，不参与风险融合。"""
+        return class_id in (self.CLASS_SITTING, self.CLASS_NON_PERSON)
+
+    def _is_fallen_class(self, class_id):
+        return class_id == self.CLASS_FALLEN
+
+    def _is_safe_class(self, class_id):
+        return class_id == self.CLASS_SAFE
+
+    def _is_safe_state(self, state):
+        return state == self.STATE_SAFE
 
     def update(self, person_id, class_id, model_risk, **kwargs):
         self._init_if_needed(person_id)
@@ -86,12 +106,19 @@ class RiskEngineV2:
         self.smooth_score[person_id] = smooth
         return smooth
 
+    def _reaches_warning_threshold(self, risk):
+        return risk >= self.warning_thres
+
     def _count_high_risk_streak(self, person_id, smooth):
         """累计连续超阈值帧数，中断即清零。"""
-        if smooth >= self.warning_thres:
+        if self._reaches_warning_threshold(smooth):
             self.counter[person_id] += 1
         else:
             self.counter[person_id] = 0
+
+    def _streak_reaches_trigger(self, person_id):
+        """连续超阈值帧数已达 DANGER 触发门限。"""
+        return self.counter[person_id] >= self.trigger_frames
 
     def _resolve_state(self, person_id, class_id, danger_prob, smooth):
         if self._is_danger_latched(person_id):
@@ -107,31 +134,37 @@ class RiskEngineV2:
         """
         if not self._is_recovery_frame(class_id, danger_prob):
             self.lock_count[person_id] = 0
-            return "DANGER"
+            return self.STATE_DANGER
 
         self.lock_count[person_id] += 1
-        if self.lock_count[person_id] < self.lock_frames:
-            return "DANGER"
+        if not self._has_recovered_long_enough(person_id):
+            return self.STATE_DANGER
 
         self._clear_danger_latch(person_id)
-        return "WARNING"
+        return self.STATE_WARNING
+
+    def _has_recovered_long_enough(self, person_id):
+        """连续恢复帧数已达 DANGER 解锁门限。"""
+        return self.lock_count[person_id] >= self.lock_frames
 
     def _on_normal_state(self, person_id, smooth):
         """前置条件：此人未处于 DANGER 锁存状态。
 
         超阈值帧数够则升级 DANGER，否则按平滑风险给出 WARNING / SAFE。
         """
-        if self.counter[person_id] >= self.trigger_frames:
+        if self._streak_reaches_trigger(person_id):
             self._latch_danger(person_id)
-            return "DANGER"
-        if smooth >= self.warning_thres:
+            return self.STATE_DANGER
+        if self._reaches_warning_threshold(smooth):
             self._start_warning_hold(person_id)
-            return "WARNING"
-        return "SAFE"
+            return self.STATE_WARNING
+        return self.STATE_SAFE
 
     def _is_recovery_frame(self, class_id, danger_prob):
         """本帧模型判为 SAFE，且瞬时风险已低于阈值。"""
-        return class_id == self.CLASS_SAFE and danger_prob < self.warning_thres
+        if not self._is_safe_class(class_id):
+            return False
+        return not self._reaches_warning_threshold(danger_prob)
 
     def _start_warning_hold(self, person_id):
         """发出 WARNING 后开启保护期，期间 SAFE 候选一律被压回 WARNING。"""
@@ -145,10 +178,12 @@ class RiskEngineV2:
 
     def _hold_warning_before_safe(self, person_id, state):
         """保护期未满时，不给 WARNING 直接退回 SAFE。"""
-        if state != "SAFE" or not self._has_warning_hold_remaining(person_id):
+        if not self._is_safe_state(state):
+            return state
+        if not self._has_warning_hold_remaining(person_id):
             return state
         self._consume_warning_hold_frame(person_id)
-        return "WARNING"
+        return self.STATE_WARNING
 
     def _is_danger_latched(self, person_id):
         return self.danger_confirmed.get(person_id, False)

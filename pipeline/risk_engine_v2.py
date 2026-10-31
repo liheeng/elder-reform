@@ -95,11 +95,16 @@ class RiskEngineV2:
 
     def _resolve_state(self, person_id, class_id, danger_prob, smooth):
         if self._is_danger_latched(person_id):
-            return self._state_while_latched(person_id, class_id, danger_prob)
-        return self._state_unlatched(person_id, smooth)
+            return self._on_danger_state_while_latched(
+                person_id, class_id, danger_prob
+            )
+        return self._on_normal_state(person_id, smooth)
 
-    def _state_while_latched(self, person_id, class_id, danger_prob):
-        """DANGER 已锁存：只认连续 lock_frames 帧的稳定恢复，其余一律维持。"""
+    def _on_danger_state_while_latched(self, person_id, class_id, danger_prob):
+        """前置条件：此人处于 DANGER 锁存状态。
+
+        只认连续 lock_frames 帧的稳定恢复，其余一律维持 DANGER。
+        """
         if not self._is_recovery_frame(class_id, danger_prob):
             self.lock_count[person_id] = 0
             return "DANGER"
@@ -111,8 +116,11 @@ class RiskEngineV2:
         self._clear_danger_latch(person_id)
         return "WARNING"
 
-    def _state_unlatched(self, person_id, smooth):
-        """未锁存：超阈值帧数够则升级 DANGER，否则按平滑风险给出 WARNING / SAFE。"""
+    def _on_normal_state(self, person_id, smooth):
+        """前置条件：此人未处于 DANGER 锁存状态。
+
+        超阈值帧数够则升级 DANGER，否则按平滑风险给出 WARNING / SAFE。
+        """
         if self.counter[person_id] >= self.trigger_frames:
             self._latch_danger(person_id)
             return "DANGER"

@@ -125,7 +125,7 @@ class RiskEngineV2:
             self._latch_danger(person_id)
             return "DANGER"
         if smooth >= self.warning_thres:
-            self.lock_count[person_id] = self.lock_frames
+            self._start_warning_hold(person_id)
             return "WARNING"
         return "SAFE"
 
@@ -133,11 +133,21 @@ class RiskEngineV2:
         """本帧模型判为 SAFE，且瞬时风险已低于阈值。"""
         return class_id == self.CLASS_SAFE and danger_prob < self.warning_thres
 
-    def _hold_warning_before_safe(self, person_id, state):
-        """WARNING 触发后，风险回落也要再停留 lock_frames 帧。"""
-        if state != "SAFE" or self.lock_count.get(person_id, 0) <= 0:
-            return state
+    def _start_warning_hold(self, person_id):
+        """发出 WARNING 后开启保护期，期间 SAFE 候选一律被压回 WARNING。"""
+        self.lock_count[person_id] = self.lock_frames
+
+    def _has_warning_hold_remaining(self, person_id):
+        return self.lock_count.get(person_id, 0) > 0
+
+    def _consume_warning_hold_frame(self, person_id):
         self.lock_count[person_id] -= 1
+
+    def _hold_warning_before_safe(self, person_id, state):
+        """保护期未满时，不给 WARNING 直接退回 SAFE。"""
+        if state != "SAFE" or not self._has_warning_hold_remaining(person_id):
+            return state
+        self._consume_warning_hold_frame(person_id)
         return "WARNING"
 
     def _is_danger_latched(self, person_id):

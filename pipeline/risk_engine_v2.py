@@ -67,53 +67,78 @@ class RiskEngineV2:
         self._init_if_needed(person_id)
 
         danger_prob = self._compute_danger_prob(class_id, model_risk)
+        smooth = self._smooth_risk(person_id, danger_prob)
+        self._count_high_risk_streak(person_id, smooth)
 
-        # EMA 平滑
+        state = self._resolve_state(person_id, class_id, danger_prob, smooth)
+        state = self._hold_warning_before_safe(person_id, state)
+
+        return {
+            "risk_score": float(smooth),
+            "state": state,
+            "danger_confirmed": self._is_danger_latched(person_id),
+        }
+
+    def _smooth_risk(self, person_id, danger_prob):
+        """EMA：本帧风险向历史平滑值靠拢。"""
         prev = self.smooth_score[person_id]
         smooth = self.alpha * danger_prob + (1.0 - self.alpha) * prev
         self.smooth_score[person_id] = smooth
+        return smooth
 
-        # 连续计数
+    def _count_high_risk_streak(self, person_id, smooth):
+        """累计连续超阈值帧数，中断即清零。"""
         if smooth >= self.warning_thres:
             self.counter[person_id] += 1
         else:
             self.counter[person_id] = 0
 
-        pid = person_id
+    def _resolve_state(self, person_id, class_id, danger_prob, smooth):
+        if self._is_danger_latched(person_id):
+            return self._state_while_latched(person_id, class_id, danger_prob)
+        return self._state_unlatched(person_id, smooth)
 
-        # 状态机
-        if self.danger_confirmed.get(pid, False):
-            if class_id == self.CLASS_SAFE and danger_prob < self.warning_thres:
-                self.lock_count[pid] = self.lock_count.get(pid, 0) + 1
-                if self.lock_count[pid] >= self.lock_frames:
-                    self.danger_confirmed[pid] = False
-                    self.lock_count[pid] = 0
-                    self.counter[pid] = 0
-                    state = "WARNING"
-                else:
-                    state = "DANGER"
-            else:
-                self.lock_count[pid] = 0
-                state = "DANGER"
+    def _state_while_latched(self, person_id, class_id, danger_prob):
+        """DANGER 已锁存：只认连续 lock_frames 帧的稳定恢复，其余一律维持。"""
+        if not self._is_recovery_frame(class_id, danger_prob):
+            self.lock_count[person_id] = 0
+            return "DANGER"
 
-        elif self.counter[pid] >= self.trigger_frames:
-            self.danger_confirmed[pid] = True
-            state = "DANGER"
+        self.lock_count[person_id] += 1
+        if self.lock_count[person_id] < self.lock_frames:
+            return "DANGER"
 
-        elif smooth >= self.warning_thres:
-            state = "WARNING"
-            self.lock_count[pid] = self.lock_frames
+        self._clear_danger_latch(person_id)
+        return "WARNING"
 
-        else:
-            state = "SAFE"
+    def _state_unlatched(self, person_id, smooth):
+        """未锁存：超阈值帧数够则升级 DANGER，否则按平滑风险给出 WARNING / SAFE。"""
+        if self.counter[person_id] >= self.trigger_frames:
+            self._latch_danger(person_id)
+            return "DANGER"
+        if smooth >= self.warning_thres:
+            self.lock_count[person_id] = self.lock_frames
+            return "WARNING"
+        return "SAFE"
 
-        # 锁定保护
-        if state == "SAFE" and self.lock_count.get(pid, 0) > 0:
-            state = "WARNING"
-            self.lock_count[pid] -= 1
+    def _is_recovery_frame(self, class_id, danger_prob):
+        """本帧模型判为 SAFE，且瞬时风险已低于阈值。"""
+        return class_id == self.CLASS_SAFE and danger_prob < self.warning_thres
 
-        return {
-            "risk_score": float(smooth),
-            "state": state,
-            "danger_confirmed": self.danger_confirmed.get(pid, False),
-        }
+    def _hold_warning_before_safe(self, person_id, state):
+        """WARNING 触发后，风险回落也要再停留 lock_frames 帧。"""
+        if state != "SAFE" or self.lock_count.get(person_id, 0) <= 0:
+            return state
+        self.lock_count[person_id] -= 1
+        return "WARNING"
+
+    def _is_danger_latched(self, person_id):
+        return self.danger_confirmed.get(person_id, False)
+
+    def _latch_danger(self, person_id):
+        self.danger_confirmed[person_id] = True
+
+    def _clear_danger_latch(self, person_id):
+        self.danger_confirmed[person_id] = False
+        self.lock_count[person_id] = 0
+        self.counter[person_id] = 0

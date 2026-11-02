@@ -34,7 +34,7 @@ class TCNEncoder(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
-        """x: (B, T, input_dim) -> (B, T, hidden_dim)"""
+        """x: (B, T, input_dim) -> (B, hidden_dim, T)"""
         # 逐帧线性投影只改变特征宽度，然后换轴以匹配 Conv1d 的 (B, C, T) 输入格式。
         h = self.input_proj(x).transpose(1, 2)
         for blk in self.blocks:

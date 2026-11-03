@@ -38,7 +38,7 @@ import cv2
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 ARCHIVE = Path("/Volumes/media-backup/AI-data/dataset/falldown/Le2i-v2")
-REAL_DIR = Path("/Volumes/media-backup/AI-data/real-resource/Yolo视觉素材/人摔倒")
+REAL_DIR = Path("/Volumes/media-backup/AI-data/real-resource/Yolo_video_resource/person_fall")
 
 NORMALS = [
     ("Office 19", ARCHIVE / "Office/Office/video (19).avi"),

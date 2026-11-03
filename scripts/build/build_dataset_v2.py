@@ -271,7 +271,13 @@ def load_scores(sc_path, n_frames):
     return scores
 
 
-def main():
+def main(keypoints_dir=None, suffix=""):
+    """keypoints_dir: 关键点缓存目录（默认 yolo_keypoints/）。
+
+    suffix: 产物文件名后缀（默认空 = 覆盖生产文件）。换检测器重抽缓存做 A/B 时，
+    用 --keypoints-dir + --suffix 把产物写到另一套文件名，不动生产数据。
+    """
+    kp_dir = keypoints_dir or KEYPOINTS_DIR
     os.makedirs(PROCESSED_DIR, exist_ok=True)
 
     all_x = []
@@ -308,9 +314,9 @@ def main():
 
         for vf in video_files:
             video_id = vf.replace("video (", "").replace(").avi", "")
-            kp_path = os.path.join(KEYPOINTS_DIR, f"{scene_name}_video_{video_id}_keypoints.npy")
-            cf_path = os.path.join(KEYPOINTS_DIR, f"{scene_name}_video_{video_id}_confs.npy")
-            sc_path = os.path.join(KEYPOINTS_DIR, f"{scene_name}_video_{video_id}_scores.npy")
+            kp_path = os.path.join(kp_dir, f"{scene_name}_video_{video_id}_keypoints.npy")
+            cf_path = os.path.join(kp_dir, f"{scene_name}_video_{video_id}_confs.npy")
+            sc_path = os.path.join(kp_dir, f"{scene_name}_video_{video_id}_scores.npy")
 
             if not os.path.exists(kp_path):
                 print(f"  跳过 video {video_id} (keypoints 缓存)")
@@ -390,9 +396,9 @@ def main():
             if video_id not in confirmed_ids:
                 continue
 
-            kp_path = os.path.join(KEYPOINTS_DIR, f"{scene_name}_video_{video_id}_keypoints.npy")
-            cf_path = os.path.join(KEYPOINTS_DIR, f"{scene_name}_video_{video_id}_confs.npy")
-            sc_path = os.path.join(KEYPOINTS_DIR, f"{scene_name}_video_{video_id}_scores.npy")
+            kp_path = os.path.join(kp_dir, f"{scene_name}_video_{video_id}_keypoints.npy")
+            cf_path = os.path.join(kp_dir, f"{scene_name}_video_{video_id}_confs.npy")
+            sc_path = os.path.join(kp_dir, f"{scene_name}_video_{video_id}_scores.npy")
 
             if not os.path.exists(kp_path):
                 print(f"  跳过 video {video_id} (keypoints 缓存)")
@@ -509,11 +515,11 @@ def main():
     times = np.array(all_times, dtype=np.float32)
     vids = np.array(video_ids_list, dtype=np.int64)
 
-    np.save(os.path.join(PROCESSED_DIR, "x_v2.npy"), xs)
-    np.save(os.path.join(PROCESSED_DIR, "class_labels_v2.npy"), classes)
-    np.save(os.path.join(PROCESSED_DIR, "risk_labels_v2.npy"), risks)
-    np.save(os.path.join(PROCESSED_DIR, "time_labels_v2.npy"), times)
-    np.save(os.path.join(PROCESSED_DIR, "video_ids_v2.npy"), vids)
+    np.save(os.path.join(PROCESSED_DIR, f"x_v2{suffix}.npy"), xs)
+    np.save(os.path.join(PROCESSED_DIR, f"class_labels_v2{suffix}.npy"), classes)
+    np.save(os.path.join(PROCESSED_DIR, f"risk_labels_v2{suffix}.npy"), risks)
+    np.save(os.path.join(PROCESSED_DIR, f"time_labels_v2{suffix}.npy"), times)
+    np.save(os.path.join(PROCESSED_DIR, f"video_ids_v2{suffix}.npy"), vids)
 
     total = len(xs)
     print(f"\n{'='*60}")
@@ -531,4 +537,12 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+
+    _ap = argparse.ArgumentParser(description="构建 v2 数据集（Le2i + PV）")
+    _ap.add_argument("--keypoints-dir", default=None,
+                     help="关键点缓存目录，默认 yolo_keypoints/")
+    _ap.add_argument("--suffix", default="",
+                     help="产物文件名后缀，默认空=写生产文件 x_v2.npy 等")
+    _args = _ap.parse_args()
+    main(_args.keypoints_dir, _args.suffix)

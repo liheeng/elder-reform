@@ -35,6 +35,14 @@ BASE_FILES = {
 CLASS_NAMES = ["SAFE", "FALLEN", "SITTING", "NON_PERSON"]
 
 
+def _with_suffix(name, suffix):
+    """x_v2.npy + "_yolos640" -> x_v2_yolos640.npy；后缀为空时原样返回。"""
+    if not suffix:
+        return name
+    p = Path(name)
+    return f"{p.stem}{suffix}{p.suffix}"
+
+
 def describe(y, title):
     counts = np.bincount(y, minlength=len(CLASS_NAMES))
     total = len(y)
@@ -51,10 +59,13 @@ def main():
     ap.add_argument("--suffix", default="_nonperson", help="输出文件名后缀")
     ap.add_argument("--shard-prefix", default="nonperson_v2",
                     help="分片文件前缀（见 build_dataset_nonperson.py）")
+    ap.add_argument("--base-suffix", default="",
+                    help="基础数据集后缀（换检测器重建的那一套用 _yolos640 之类）")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
-    base = {k: np.load(PROCESSED_DIR / v) for k, v in BASE_FILES.items()}
+    base = {k: np.load(PROCESSED_DIR / _with_suffix(v, args.base_suffix))
+            for k, v in BASE_FILES.items()}
     n_base = base["class"].shape[0]
     for k, arr in base.items():
         if arr.shape[0] != n_base:

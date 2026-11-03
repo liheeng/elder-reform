@@ -142,6 +142,8 @@ def build_clip(video_path: Path, extractor, force: bool, min_det_ratio: float,
 
 
 def main():
+    global KEYPOINTS_DIR
+
     ap = argparse.ArgumentParser(description="构建 NON_PERSON(3) 分片")
     ap.add_argument("--index", default=str(INDEX_CSV), help="素材登记表 CSV")
     ap.add_argument("--cameras", default="fixed",
@@ -152,9 +154,13 @@ def main():
     ap.add_argument("--min-det-ratio", type=float, default=DEFAULT_MIN_DET_RATIO,
                     help="窗口内检出的最低帧占比，低于此值丢弃该窗口")
     ap.add_argument("--force", action="store_true", help="忽略关键点缓存重新抽点")
+    ap.add_argument("--keypoints-dir", default=str(KEYPOINTS_DIR),
+                    help="关键点缓存目录（换检测器做 A/B 时指向另一套缓存）")
     ap.add_argument("--log-every", type=int, default=300)
     ap.add_argument("--dry-run", action="store_true", help="只列出将处理的片段")
     args = ap.parse_args()
+
+    KEYPOINTS_DIR = Path(args.keypoints_dir)
 
     cameras = {c.strip().lower() for c in args.cameras.split(",") if c.strip()}
     rows = load_index(Path(args.index), cameras)

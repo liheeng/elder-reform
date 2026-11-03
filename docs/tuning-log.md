@@ -8,6 +8,10 @@
 > **本文是现场记录（按时间倒序、偏证据）。** 若想看按优化条目重新整理的回顾
 > ——「发现什么问题 → 解决思路 → 怎么做的 → 结果如何」四段式，外加**方法论总结**与**术语小抄**，
 > 见 [docs/optimization-review.md](optimization-review.md)。
+>
+> 若想看**某一次优化探索的完整思路链**（多个假设被逐个证伪的过程），
+> 见 [docs/person-recall-optimization.md](person-recall-optimization.md)
+> —— 2026-11-03「人 / 非人判定」那一轮（面部识别 / 状态锁存 / 换检测器 / 多框归因）。
 
 ---
 

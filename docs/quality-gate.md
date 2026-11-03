@@ -307,3 +307,5 @@ for i in range(0, 400):
 - [`docs/architecture.md`](architecture.md) §3 数据契约、§9.6 视角与距离不变性
 - [`docs/tuning-log.md`](tuning-log.md) —— 优化 5（两段式门）、优化 6（NON_PERSON 样本为 0）、优化 7（`conf` 与 WARNING 阈值）
 - [`docs/optimization-review.md`](optimization-review.md) —— 按优化条目重排的回顾与方法论
+- [`docs/person-recall-optimization.md`](person-recall-optimization.md) —— 2026-11-03 一轮完整探索：
+  换检测器 / 面部识别 / 状态锁存三条路线的证伪过程，以及"额外框全是分散独立框、0% 可合并"等实测结论

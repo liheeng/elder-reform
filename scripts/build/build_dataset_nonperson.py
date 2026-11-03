@@ -249,13 +249,19 @@ def main():
         "windows": int(n),
         "clips": meta,
     }
-    with open(PROCESSED_DIR / "nonperson_meta.json", "w", encoding="utf-8") as fh:
+    # meta 跟着 --out-prefix 走：换检测器重建分片时不能覆盖生产的来源记录。
+    # 默认前缀（生产）仍写 nonperson_meta.json，保持既有引用不变。
+    if prefix == PROCESSED_DIR / "nonperson_v2":
+        meta_path = PROCESSED_DIR / "nonperson_meta.json"
+    else:
+        meta_path = prefix.with_name(prefix.name + "_meta.json")
+    with open(meta_path, "w", encoding="utf-8") as fh:
         json.dump(meta_doc, fh, ensure_ascii=False, indent=2)
 
     print("\n" + "=" * 60)
     print(f"完成：{n} 个窗口，形状 {xs.shape}")
     print(f"  {prefix.name}_x.npy / _class.npy / _risk.npy / _time.npy / _vids.npy")
-    print(f"  来源记录 -> processed/nonperson_meta.json")
+    print(f"  来源记录 -> {meta_path}")
     print("=" * 60)
     return 0
 
